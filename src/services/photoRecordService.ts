@@ -1,6 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-
+import { appendJsonRecord, resolveRecordFilePath } from "./jsonRecordStore.js";
 import { RuleBasedVisionAnalyzer } from "./visionAnalyzer.js";
 import type {
   PhotoObservationInput,
@@ -8,7 +6,7 @@ import type {
   StoredPhotoRecord,
 } from "../types/photoRecord.js";
 
-const DEFAULT_PHOTO_RECORDS_PATH = path.join(process.cwd(), "src", "data", "photoRecords.json");
+const DEFAULT_PHOTO_RECORDS_PATH = "src/data/photoRecords.json";
 const BASE64_PREVIEW_LENGTH = 32;
 
 export async function recordPetPhotoObservation(
@@ -53,38 +51,11 @@ export async function recordPetPhotoObservation(
 }
 
 async function appendPhotoRecord(record: StoredPhotoRecord): Promise<void> {
-  const photoRecordsPath = getPhotoRecordsPath();
-  await mkdir(path.dirname(photoRecordsPath), { recursive: true });
-  const records = await readExistingPhotoRecords();
-  records.push(record);
-  await writeFile(photoRecordsPath, `${JSON.stringify(records, null, 2)}\n`, "utf8");
-}
-
-async function readExistingPhotoRecords(): Promise<StoredPhotoRecord[]> {
-  try {
-    const body = await readFile(getPhotoRecordsPath(), "utf8");
-    const parsed: unknown = JSON.parse(body);
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.filter(isStoredPhotoRecord);
-  } catch {
-    return [];
-  }
-}
-
-function getPhotoRecordsPath(): string {
-  const configuredPath = process.env.PHOTO_RECORDS_PATH?.trim();
-
-  if (configuredPath !== undefined && configuredPath.length > 0) {
-    return path.isAbsolute(configuredPath)
-      ? configuredPath
-      : path.join(process.cwd(), configuredPath);
-  }
-
-  return DEFAULT_PHOTO_RECORDS_PATH;
+  await appendJsonRecord(
+    resolveRecordFilePath("PHOTO_RECORDS_PATH", DEFAULT_PHOTO_RECORDS_PATH),
+    record,
+    isStoredPhotoRecord,
+  );
 }
 
 function isStoredPhotoRecord(value: unknown): value is StoredPhotoRecord {

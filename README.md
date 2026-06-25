@@ -11,7 +11,7 @@
 - Node.js + TypeScript strict mode
 - Express 기반 HTTP 서버
 - MCP Streamable HTTP endpoint
-- MCP tools 7개 구현
+- MCP tools 8개 구현
 - `GET /health` 구현
 - `POST /mcp` 구현
 - `.env` / `.env.example` 환경 변수 구성
@@ -28,6 +28,7 @@
 - 지역명 기반 동물병원 후보 안내
 - 보호자 자연어 증상 표현을 표준 증상명과 카테고리로 정리
 - 변/피부 사진 기록과 보호자 관찰 기반 이상 징후 정리
+- 위험 음식 섭취 상황을 병원 상담용으로 구조화해 기록
 - 모든 MCP tool 응답에 의료 안전 문구 포함
 
 ## MCP Tool 목록
@@ -41,6 +42,7 @@
 | `find_nearby_animal_hospitals` | 지역명 기반으로 동물병원 후보를 안내합니다. 공공데이터 API 또는 로컬 샘플 데이터를 사용합니다. |
 | `classify_pet_symptom` | 보호자 자연어 증상 표현을 표준 증상명, 카테고리, `normalizedSymptoms`로 정리합니다. |
 | `record_pet_photo_observation` | 변/피부 사진 기록과 보호자 관찰 내용을 바탕으로 이상 징후를 정리합니다. |
+| `record_food_ingestion_event` | 위험할 수 있는 음식 섭취 상황을 구조화해 기록하고 동물병원 상담용 요약을 생성합니다. |
 
 ## Tool 상세
 
@@ -174,6 +176,37 @@
 
 사진 기능은 실제 이미지 진단 기능이 아닙니다. 현재 MVP는 보호자가 입력한 사진 설명, 관찰 항목, 관련 증상을 바탕으로 이상 징후를 기록하는 보조 기능입니다. `imageBase64`는 전체 원문을 저장하지 않고 preview/omitted 형태로 처리합니다.
 
+### `record_food_ingestion_event`
+
+입력:
+
+- `dogName?: string`
+- `weightKg?: number`
+- `foodName`: string
+- `foodDetail?: string`
+- `amount?: string`
+- `eatenAt?: string`
+- `photoUrl?: string`
+- `imageBase64?: string`
+- `currentSymptoms?: string[]`
+- `ownerMemo?: string`
+
+출력:
+
+- `recordId`
+- 위험도: `safe` | `caution` | `danger` | `unknown`
+- 기록된 정보 요약
+- 부족한 정보 질문 목록
+- 즉시 확인해야 할 항목
+- 병원 상담용 요약문
+- 안전 문구
+
+설명:
+
+`record_food_ingestion_event`는 반려견이 위험할 수 있는 음식을 먹었을 때 음식 종류, 상세 음식명, 섭취량, 섭취 시간, 몸무게, 현재 증상, 사진 정보를 기록하고 동물병원 상담용 요약을 생성하는 tool입니다. 이 기능은 진단이나 처방이 아니라 보호자가 수의사에게 정확한 정보를 전달할 수 있도록 돕는 기록 보조 기능입니다.
+
+위험도가 `danger`이면 응답에 “빠른 동물병원 상담 권장” 안내를 명확히 포함합니다. `imageBase64`는 전체 원문을 저장하지 않고 preview/omitted 형태로 처리합니다.
+
 ## 프로젝트 구조
 
 ```text
@@ -182,21 +215,25 @@ meong-care-mcp/
 │  ├─ index.ts
 │  ├─ data/
 │  │  ├─ animalHospitals.sample.json
+│  │  ├─ foodIngestionRecords.json
 │  │  ├─ symptomDictionary.sample.json
 │  │  └─ photoRecords.json
 │  ├─ logic/
 │  │  ├─ careRules.ts
+│  │  ├─ foodIngestionRules.ts
 │  │  ├─ foodRules.ts
 │  │  ├─ hospitalRules.ts
 │  │  ├─ photoRules.ts
 │  │  ├─ riskRules.ts
 │  │  └─ symptomRules.ts
 │  ├─ services/
+│  │  ├─ foodIngestionRecordService.ts
 │  │  ├─ photoRecordService.ts
 │  │  ├─ publicDataHospitalService.ts
 │  │  ├─ publicDataSymptomService.ts
 │  │  └─ visionAnalyzer.ts
 │  ├─ types/
+│  │  ├─ foodIngestionRecord.ts
 │  │  └─ photoRecord.ts
 │  └─ utils/
 │     └─ safetyMessage.ts
@@ -225,6 +262,34 @@ npm run dev
 ```bash
 npm run build
 ```
+
+## 자동 검증
+
+도메인 룰과 기록 저장소 회귀 테스트만 빠르게 확인할 때는 아래 명령을 실행합니다.
+
+```bash
+npm test
+```
+
+배포 또는 PlayMCP 등록 전에는 아래 명령으로 회귀 테스트와 MCP tool 품질 검사를 함께 실행합니다.
+
+```bash
+npm run validate
+```
+
+검증 항목:
+
+- TypeScript strict build 통과
+- 음식 위험도, 일상 상태 위험도, 케어 추천, 증상 분류, 사진 관찰, 병원 검색 룰 회귀 테스트 통과
+- JSON 기록 저장소의 파일 생성, 동시 기록, 손상 파일 복구 테스트 통과
+- `/health` 응답 확인
+- Streamable HTTP MCP 초기화 확인
+- `tools/list`에서 8개 tool 노출 확인
+- tool 이름 규칙, 중복, 개수 제한 확인
+- `description`, `inputSchema`, `annotations` 필수값 확인
+- 모든 대표 tool 호출 응답의 안전 문구 포함 확인
+- 진단/처방으로 오해될 수 있는 금지 표현 포함 여부 확인
+- 사진 기록과 위험 음식 섭취 기록이 임시 파일에 정상 저장되는지 확인
 
 ## Production 실행
 
@@ -288,9 +353,23 @@ PUBLIC_DATA_ANIMAL_HOSPITAL_API_URL=https://apis.data.go.kr/1741000/animal_hospi
 USE_PUBLIC_DATA_API=false
 PUBLIC_DATA_SYMPTOM_API_URL=
 USE_SYMPTOM_PUBLIC_DATA=false
+PHOTO_RECORDS_PATH=
+FOOD_INGESTION_RECORDS_PATH=
 ```
 
 환경 변수가 누락되어도 서버는 시작됩니다. 공공데이터 API 사용이 꺼져 있거나 API 호출이 실패하면 로컬 샘플 데이터로 fallback합니다.
+
+## 기록 데이터 저장
+
+사진 기록과 위험 음식 섭취 기록은 MVP 기준으로 JSON 파일에 저장합니다.
+
+- 사진 기록 기본 경로: `src/data/photoRecords.json`
+- 위험 음식 섭취 기록 기본 경로: `src/data/foodIngestionRecords.json`
+- 배포 환경에서는 `PHOTO_RECORDS_PATH`, `FOOD_INGESTION_RECORDS_PATH`로 저장 경로를 지정할 수 있습니다.
+- 기록 파일이 없으면 자동 생성합니다.
+- 기록 파일이 손상되었거나 JSON 배열이 아니면 기존 내용을 `.invalid-*.bak` 파일로 보존하고 새 기록 파일을 다시 생성합니다.
+- 동시에 기록 요청이 들어와도 같은 파일에 대한 쓰기를 순차 처리합니다.
+- `imageBase64` 원문은 저장하지 않고 `[base64 omitted]` 또는 짧은 preview만 저장합니다.
 
 ## 공공데이터 API
 
@@ -320,11 +399,12 @@ https://your-domain.example/mcp
 
 등록 전 확인 순서:
 
-1. `npm run build`
+1. `npm run validate`
 2. `npm start`
 3. `GET /health` 응답 확인
 4. PlayMCP endpoint에 `/mcp` 경로 등록
-5. `tools/list`에서 7개 tool 노출 확인
+5. `tools/list`에서 8개 tool 노출 확인
+6. `record_food_ingestion_event`가 tool 목록에 표시되는지 확인
 
 ## KakaoCloud Git 소스 빌드
 
@@ -342,6 +422,7 @@ https://your-domain.example/mcp
 ## 배포 체크리스트
 
 - `npm run build` 통과
+- `npm run validate` 통과
 - `npm start` 실행 확인
 - `/health` 200 응답 확인
 - 배포 환경 변수 등록
@@ -360,6 +441,10 @@ https://your-domain.example/mcp
 4. 강아지 변 사진을 기록해줘. 사진상 묽은 변처럼 보이고 어제부터 밥을 덜 먹어.
 5. 부산 진구 근처 동물병원 알려줘.
 6. 방금 증상들을 동물병원에 보여줄 수 있게 정리해줘.
+7. 우리 강아지가 방금 포도 한 알을 먹은 것 같아요. 몸무게는 11kg이에요.
+8. 샤인머스캣 두 알을 30분 전에 먹었어요. 아직 증상은 없어요.
+9. 초콜릿 포장지를 씹은 것 같아요. 사진도 기록해둘게요.
+10. 방금 위험 음식 섭취 기록을 병원에 보여줄 수 있게 요약해줘.
 
 ## 제출 요약
 

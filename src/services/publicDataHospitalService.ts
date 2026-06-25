@@ -40,20 +40,20 @@ export async function loadAnimalHospitals(
       return {
         hospitals: await loadSampleHospitals(),
         dataNotice:
-          "공공데이터 API에서 조건에 맞는 결과를 찾지 못해 샘플/백업 데이터를 기준으로 안내합니다.",
+          "공공데이터 API에서 조건에 맞는 결과를 찾지 못해 로컬 샘플 데이터를 기준으로 안내합니다.",
       };
     } catch {
       return {
         hospitals: await loadSampleHospitals(),
         dataNotice:
-          "공공데이터 API 연결에 실패하여 샘플/백업 데이터를 기준으로 안내합니다.",
+          "공공데이터 API 연결에 실패해 로컬 샘플 데이터를 기준으로 안내합니다.",
       };
     }
   }
 
   return {
     hospitals: await loadSampleHospitals(),
-    dataNotice: "공공데이터 API 사용이 꺼져 있어 샘플/백업 데이터를 기준으로 안내합니다.",
+    dataNotice: "공공데이터 API 사용이 꺼져 있어 로컬 샘플 데이터를 기준으로 안내합니다.",
   };
 }
 

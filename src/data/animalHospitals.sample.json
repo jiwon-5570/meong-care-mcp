@@ -28,7 +28,7 @@
     "licenseDate": "2019-09-18"
   },
   {
-    "name": "진주 강변동물병원 샘플",
+    "name": "진주 강남동물병원 샘플",
     "address": "경상남도 진주시 진주대로 000",
     "businessStatus": "영업중",
     "phoneNumber": "055-000-0005",
@@ -70,17 +70,17 @@
     "licenseDate": "2013-07-30"
   },
   {
-    "name": "역삼 펫케어동물병원 샘플",
+    "name": "역삼 24시동물병원 샘플",
     "address": "서울특별시 강남구 역삼로 000",
-    "businessStatus": "휴업",
+    "businessStatus": "영업중",
     "phoneNumber": "02-000-0011",
     "licenseDate": "2011-05-21"
   },
   {
     "name": "부산 해운대 야간응급동물병원 샘플",
-    "address": "부산광역시 해운대구 좌동순환로 000",
+    "address": "부산광역시 해운대구 좌동로 000",
     "businessStatus": "영업중",
     "phoneNumber": "051-000-0012",
-    "licenseDate": "2023-10-10"
+    "licenseDate": "2023-01-10"
   }
 ]

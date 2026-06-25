@@ -42,7 +42,7 @@ export async function loadSymptomDictionary(): Promise<SymptomDictionaryLoadResu
         dictionary: await loadLocalSymptomDictionary(),
         dataSource: "local_sample",
         dataNotice:
-          "공공데이터 API 연결에 실패하여 로컬 증상 사전을 기준으로 표현을 정리합니다.",
+          "공공데이터 API 연결에 실패해 로컬 증상 사전을 기준으로 표현을 정리합니다.",
       };
     }
   }

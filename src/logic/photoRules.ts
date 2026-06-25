@@ -11,14 +11,14 @@ interface SignRule {
 }
 
 const STOOL_SIGN_RULES: SignRule[] = [
-  { sign: "normal_like", keywords: ["정상", "단단", "모양이 잡힘", "갈색"] },
-  { sign: "soft", keywords: ["무른", "묽은", "퍼짐", "말랑"] },
+  { sign: "normal_like", keywords: ["정상", "단단", "모양이 잡", "갈색"] },
+  { sign: "soft", keywords: ["무른", "묽은", "질퍽", "말랑"] },
   { sign: "diarrhea_like", keywords: ["설사", "물변", "흐름", "물처럼"] },
   { sign: "blood_like", keywords: ["피", "혈", "빨간", "붉은", "선홍"] },
-  { sign: "black_tarry_like", keywords: ["검은", "타르", "새까만", "흑색"] },
+  { sign: "black_tarry_like", keywords: ["검은", "타르", "까맣", "흑색"] },
   { sign: "mucus_like", keywords: ["점액", "끈적", "젤리"] },
   { sign: "foreign_object_like", keywords: ["이물", "플라스틱", "장난감", "천", "뼈"] },
-  { sign: "poor_quality", keywords: ["흐림", "어두움", "잘 안 보", "초점"] },
+  { sign: "poor_quality", keywords: ["흐림", "어두운", "잘 안 보", "초점"] },
 ];
 
 const SKIN_SIGN_RULES: SignRule[] = [
@@ -28,9 +28,9 @@ const SKIN_SIGN_RULES: SignRule[] = [
   { sign: "scab", keywords: ["딱지", "가피"] },
   { sign: "wound", keywords: ["상처", "피", "찢", "까짐"] },
   { sign: "discharge", keywords: ["진물", "고름", "분비물"] },
-  { sign: "swelling", keywords: ["부어", "부음", "붓기"] },
+  { sign: "swelling", keywords: ["부음", "부어", "붓기"] },
   { sign: "lump", keywords: ["혹", "덩어리", "몽우리"] },
-  { sign: "poor_quality", keywords: ["흐림", "어두움", "잘 안 보", "초점"] },
+  { sign: "poor_quality", keywords: ["흐림", "어두운", "잘 안 보", "초점"] },
 ];
 
 export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObservationAnalysis {
@@ -43,10 +43,10 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
     todayCareActions: buildCareActions(input.photoType, signs, riskLevel),
     vetSummary: buildVetSummary(input, signs, riskLevel),
     photoLimitations:
-      "사진 기반 기록은 조명, 각도, 초점, 보호자 입력에 따라 달라질 수 있어 정확한 원인 판단은 어렵습니다. 증상이 지속되거나 악화되면 수의사 상담을 권장합니다.",
+      "사진 기록은 조명, 각도, 초점, 보호자 입력에 따라 달라질 수 있어 이미지 진단이 아닙니다. 실제 상태가 심해 보이거나 증상이 지속되면 수의사 상담을 권장합니다.",
     hospitalSearchGuide:
       riskLevel === "vet_consult" || riskLevel === "urgent"
-        ? "위험도가 vet_consult 이상이면 find_nearby_animal_hospitals tool로 가까운 동물병원을 찾아 방문 전 전화 확인을 권장합니다."
+        ? "위험도가 vet_consult 이상이면 find_nearby_animal_hospitals tool로 가까운 동물병원을 찾고 방문 전 전화 확인을 권장합니다."
         : undefined,
   };
 }
@@ -143,34 +143,34 @@ function buildCareActions(
 ): string[] {
   if (photoType === "stool") {
     const actions = [
-      "새로운 간식과 기름진 음식은 중단하고 평소 먹던 식단 위주로 관리하세요.",
-      "물 섭취량을 확인하고 다음 배변 상태를 기록하세요.",
-      "임의로 사람 약을 먹이지 마세요.",
+      "새로운 간식과 기름진 음식은 중단하고 평소 먹던 식단 위주로 관리해 주세요.",
+      "물 섭취량을 확인하고 다음 배변 상태를 기록해 주세요.",
+      "보호자 판단으로 사람 약을 먹이지 마세요.",
     ];
 
     if (riskLevel === "vet_consult" || riskLevel === "urgent") {
-      actions.push("설사, 혈변, 구토, 무기력이 있으면 동물병원 상담 권장 상황입니다.");
+      actions.push("설사, 혈변, 구토, 무기력이 함께 보이면 동물병원 상담 권장 상황입니다.");
     }
 
     if (signs.includes("poor_quality")) {
-      actions.push("사진 품질이 낮으면 밝은 곳에서 초점이 맞게 다시 기록해 주세요.");
+      actions.push("사진이 흐리다면 밝은 곳에서 초점을 맞춰 다시 기록해 주세요.");
     }
 
     return actions;
   }
 
   const actions = [
-    "해당 부위를 계속 핥거나 긁는지 관찰하세요.",
-    "사람 연고, 소독약, 임의 제품 사용은 피하세요.",
-    "샴푸, 향이 강한 제품, 목욕은 일시적으로 줄이는 편이 좋습니다.",
+    "해당 부위를 계속 핥거나 긁는지 관찰해 주세요.",
+    "사람 연고, 소독제, 임의 제품 사용은 피해주세요.",
+    "향이 강한 제품이나 새 목욕 제품은 잠시 줄이는 편이 좋습니다.",
   ];
 
   if (riskLevel === "vet_consult" || riskLevel === "urgent") {
-    actions.push("진물, 부기, 빠른 번짐, 심한 통증이 있으면 동물병원 상담 권장 상황입니다.");
+    actions.push("진물, 붓기, 빠른 번짐, 심한 통증이 있으면 동물병원 상담 권장 상황입니다.");
   }
 
   if (signs.includes("poor_quality")) {
-    actions.push("사진 품질이 낮으면 밝은 곳에서 병변 전체가 보이게 다시 기록해 주세요.");
+    actions.push("사진이 흐리다면 밝은 곳에서 병변 전체가 보이게 다시 기록해 주세요.");
   }
 
   return actions;
@@ -193,7 +193,7 @@ function buildVetSummary(
     `반려견: ${dogName}`,
     `사진 종류: ${input.photoType}`,
     `촬영 시점: ${takenAt}`,
-    `관찰된 이상 징후: ${signsText}`,
+    `보호자 관찰 이상 징후: ${signsText}`,
     `관련 증상: ${relatedSymptoms}`,
     `식욕: ${input.appetite ?? "unknown"}, 구토: ${input.vomiting ?? "unknown"}, 활동량: ${input.energy ?? "unknown"}`,
     `기록 기준 위험도: ${riskLevel}`,

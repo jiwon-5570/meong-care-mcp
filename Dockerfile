@@ -16,6 +16,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV PHOTO_RECORDS_PATH=/app/data/photoRecords.json
+ENV FOOD_INGESTION_RECORDS_PATH=/app/data/foodIngestionRecords.json
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force

@@ -48,27 +48,28 @@ export interface VetVisitSummaryResult {
 }
 
 export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendation {
-  const symptomText = input.mainSymptoms.join(" ");
-  const hasDigestiveSignal = containsAny(symptomText, ["구토", "설사", "변", "식욕"]);
-  const hasSkinOrEyeSignal = containsAny(symptomText, ["가려움", "눈물", "눈곱"]);
-  const hasRespiratorySignal = containsAny(symptomText, ["기침"]);
+  const symptomContext = getSymptomContext(input.mainSymptoms);
+  const ageNote = buildAgeCareNote(input.ageYears);
 
   if (input.riskLevel === "urgent") {
     return {
       dogName: input.dogName,
       riskLevel: input.riskLevel,
       dietManagement:
-        "새로운 음식과 간식은 중단하고, 섭취한 음식과 증상 시간을 정리해 빠른 진료 권장을 우선하세요.",
-      snackRestriction: "제한 권장: 진료 상담 전에는 간식이나 새로운 음식을 추가하지 마세요.",
+        "새로운 음식과 간식은 중단하고, 먹은 음식과 증상 시작 시간을 정리해 빠른 동물병원 상담을 우선해 주세요.",
+      snackRestriction: "제한 권장: 상담 전에는 간식이나 새로운 음식을 추가하지 마세요.",
       waterCheck:
-        "물을 마실 수 있는 상태인지 확인하되, 억지로 먹이거나 마시게 하지는 마세요.",
-      walkIntensity: "산책 중단 권장: 이동은 병원 방문 등 필요한 경우에만 최소화하세요.",
-      restRecommendation: "조용하고 안전한 곳에서 쉬게 하며 상태 변화를 계속 확인하세요.",
+        "물을 마실 수 있는 상태인지 확인하되, 억지로 먹이거나 마시게 하지 마세요.",
+      walkIntensity: "산책 중단 권장: 이동은 병원 방문 등 꼭 필요한 경우로 최소화해 주세요.",
+      restRecommendation: withContextNote(
+        "조용하고 안전한 곳에서 쉬게 하며 상태 변화를 계속 확인해 주세요.",
+        ageNote,
+      ),
       symptomsToMonitor: buildSymptomsToMonitor(input.mainSymptoms, [
         "호흡 이상",
         "반복 구토",
         "혈변",
-        "극심한 처짐",
+        "급격한 처짐",
         "의식 저하",
       ]),
     };
@@ -78,13 +79,11 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
     return {
       dogName: input.dogName,
       riskLevel: input.riskLevel,
-      dietManagement: hasDigestiveSignal
-        ? "평소 먹던 사료 위주로 단순하게 관리하고, 기름진 음식이나 새로운 음식은 피하세요."
-        : "평소 식단을 유지하되 새로운 음식 추가는 잠시 미루세요.",
-      snackRestriction: "제한 권장: 증상이 안정될 때까지 간식은 줄이거나 중단하세요.",
-      waterCheck: "물 섭취량과 소변 횟수를 확인하고 평소보다 줄었는지 기록하세요.",
-      walkIntensity: "짧고 가벼운 배변 산책 정도로 줄이고 무리한 운동은 피하세요.",
-      restRecommendation: "활동을 줄이고 충분히 쉬게 하며, 증상 변화를 시간대별로 기록하세요.",
+      dietManagement: buildDietManagementForConsult(symptomContext),
+      snackRestriction: "제한 권장: 증상이 안정될 때까지 간식은 줄이거나 중단해 주세요.",
+      waterCheck: buildWaterCheck(symptomContext, input.weightKg),
+      walkIntensity: buildWalkIntensityForConsult(symptomContext),
+      restRecommendation: withContextNote(buildRestRecommendationForConsult(symptomContext), ageNote),
       symptomsToMonitor: buildSymptomsToMonitor(input.mainSymptoms, [
         "증상 증가",
         "식욕 저하 지속",
@@ -99,13 +98,15 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
     return {
       dogName: input.dogName,
       riskLevel: input.riskLevel,
-      dietManagement: hasDigestiveSignal
-        ? "오늘은 평소 먹던 사료를 중심으로 주고, 소화에 부담이 큰 음식은 피하세요."
-        : "평소 식단을 유지하며 새로운 음식은 소량이라도 신중히 주세요.",
-      snackRestriction: "가급적 제한: 증상이 사라질 때까지 새 간식은 피하는 편이 좋습니다.",
-      waterCheck: "물을 평소처럼 마시는지 확인하고, 줄거나 과하게 늘면 기록하세요.",
-      walkIntensity: "컨디션을 보며 짧고 편안한 산책으로 조절하세요.",
-      restRecommendation: "평소보다 조용히 쉴 수 있는 시간을 늘려 주세요.",
+      dietManagement: symptomContext.hasDigestiveSignal
+        ? "오늘은 평소 먹던 사료를 중심으로 주고, 소화에 부담될 수 있는 음식은 피해주세요."
+        : "평소 식단을 유지하되 새로운 음식은 소량이라도 신중하게 주세요.",
+      snackRestriction: "가급적 제한: 증상이 사라질 때까지 간식은 적게 주는 편이 좋습니다.",
+      waterCheck: buildWaterCheck(symptomContext, input.weightKg),
+      walkIntensity: symptomContext.hasRespiratorySignal
+        ? "기침이나 호흡 관련 증상이 있으면 산책은 짧게 줄이고 흥분되는 활동은 피해주세요."
+        : "컨디션을 보며 짧고 편안한 산책으로 조절해 주세요.",
+      restRecommendation: withContextNote("평소보다 조용하게 쉴 수 있는 시간을 마련해 주세요.", ageNote),
       symptomsToMonitor: buildSymptomsToMonitor(input.mainSymptoms, [
         "구토",
         "설사",
@@ -119,11 +120,11 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
   return {
     dogName: input.dogName,
     riskLevel: input.riskLevel,
-    dietManagement: "평소에 잘 맞던 사료와 식사 시간을 유지하세요.",
-    snackRestriction: "과식하지 않는 범위에서 평소처럼 관리하되 새 간식은 소량부터 확인하세요.",
-    waterCheck: "신선한 물을 항상 마실 수 있게 두고 평소 섭취량과 크게 다른지 확인하세요.",
-    walkIntensity: "평소 컨디션에 맞춰 일반적인 산책을 진행하세요.",
-    restRecommendation: "충분한 수면과 휴식 시간을 유지하세요.",
+    dietManagement: "평소에 잘 맞던 사료와 식사 시간을 유지해 주세요.",
+    snackRestriction: "과식하지 않는 범위에서 평소처럼 관리하고, 간식은 양을 확인해 주세요.",
+    waterCheck: buildWaterCheck(symptomContext, input.weightKg),
+    walkIntensity: "평소 컨디션에 맞춰 일반적인 산책을 진행해 주세요.",
+    restRecommendation: withContextNote("충분한 수면과 휴식 시간을 유지해 주세요.", ageNote),
     symptomsToMonitor: [
       "식욕 변화",
       "변 상태 변화",
@@ -180,6 +181,88 @@ export function createVetVisitSummary(input: VetVisitSummaryInput): VetVisitSumm
       "오늘 먹은 음식이나 간식이 증상과 관련될 가능성이 있나요?",
     ],
   };
+}
+
+interface SymptomContext {
+  hasDigestiveSignal: boolean;
+  hasSkinOrEyeSignal: boolean;
+  hasRespiratorySignal: boolean;
+  hasLowEnergySignal: boolean;
+}
+
+function getSymptomContext(mainSymptoms: string[]): SymptomContext {
+  const symptomText = mainSymptoms.join(" ");
+
+  return {
+    hasDigestiveSignal: containsAny(symptomText, ["구토", "설사", "변", "식욕", "먹은"]),
+    hasSkinOrEyeSignal: containsAny(symptomText, ["가려움", "눈물", "눈곱", "피부", "긁"]),
+    hasRespiratorySignal: containsAny(symptomText, ["기침", "호흡", "켁켁", "콜록"]),
+    hasLowEnergySignal: containsAny(symptomText, ["무기력", "활동량", "처짐", "기운"]),
+  };
+}
+
+function buildDietManagementForConsult(context: SymptomContext): string {
+  if (context.hasDigestiveSignal) {
+    return "평소 먹던 사료를 중심으로 단순하게 관리하고, 기름진 음식이나 새로운 음식은 피해주세요.";
+  }
+
+  if (context.hasSkinOrEyeSignal) {
+    return "새 간식이나 새 단백질원처럼 최근 바뀐 음식이 있다면 기록하고 잠시 추가 급여를 피해주세요.";
+  }
+
+  return "평소 식단은 유지하되 새로운 음식 추가는 잠시 미뤄 주세요.";
+}
+
+function buildWaterCheck(context: SymptomContext, weightKg: number | undefined): string {
+  const weightNote = weightKg !== undefined
+    ? ` 현재 입력된 몸무게는 ${weightKg}kg입니다.`
+    : "";
+
+  if (context.hasDigestiveSignal) {
+    return `물 섭취량과 소변 횟수가 평소보다 줄었는지 기록해 주세요.${weightNote}`;
+  }
+
+  return `신선한 물을 항상 마실 수 있게 두고 평소 섭취량과 크게 다른지 확인해 주세요.${weightNote}`;
+}
+
+function buildWalkIntensityForConsult(context: SymptomContext): string {
+  if (context.hasRespiratorySignal) {
+    return "기침이나 호흡 관련 증상이 있으면 산책은 짧게 줄이고 흥분되는 활동은 피해주세요.";
+  }
+
+  if (context.hasLowEnergySignal) {
+    return "활동량이 줄었다면 산책은 배변 목적의 짧은 이동 정도로 제한해 주세요.";
+  }
+
+  return "짧고 가벼운 배변 산책 정도로 줄이고 무리한 운동은 피해주세요.";
+}
+
+function buildRestRecommendationForConsult(context: SymptomContext): string {
+  if (context.hasSkinOrEyeSignal) {
+    return "긁거나 핥는 행동이 늘어나는지 확인하고, 해당 부위를 과도하게 만지지 않게 해주세요.";
+  }
+
+  return "활동량을 줄이고 충분히 쉬게 하며 증상 변화를 시간대별로 기록해 주세요.";
+}
+
+function buildAgeCareNote(ageYears: number | undefined): string | undefined {
+  if (ageYears === undefined) {
+    return undefined;
+  }
+
+  if (ageYears < 1) {
+    return "어린 강아지는 탈수나 컨디션 변화가 빠를 수 있어 변화가 이어지면 더 이르게 상담을 고려해 주세요.";
+  }
+
+  if (ageYears >= 10) {
+    return "노령견은 같은 증상도 부담이 클 수 있어 변화가 이어지면 더 이르게 상담을 고려해 주세요.";
+  }
+
+  return undefined;
+}
+
+function withContextNote(base: string, note: string | undefined): string {
+  return note === undefined ? base : `${base} ${note}`;
 }
 
 function containsAny(text: string, keywords: string[]): boolean {

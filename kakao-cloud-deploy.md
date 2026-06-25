@@ -16,6 +16,7 @@
 ```env
 PORT=3000
 PHOTO_RECORDS_PATH=/app/data/photoRecords.json
+FOOD_INGESTION_RECORDS_PATH=/app/data/foodIngestionRecords.json
 ```
 
 ## 선택 환경 변수
@@ -61,4 +62,5 @@ https://your-domain.example/mcp
 - `PORT`가 없거나 잘못된 값이면 `3000`으로 fallback합니다.
 - 공공데이터 API가 꺼져 있거나 실패하면 컨테이너 내부 `/app/data`의 샘플 데이터로 fallback합니다.
 - 사진 기록은 `PHOTO_RECORDS_PATH`에 append됩니다.
+- 위험 음식 섭취 기록은 `FOOD_INGESTION_RECORDS_PATH`에 append됩니다.
 - 컨테이너 파일시스템은 재배포 또는 재시작 시 초기화될 수 있으므로 장기 보관이 필요하면 외부 저장소 연동이 필요합니다.

@@ -20,6 +20,7 @@ import { classifyPetSymptom } from "./logic/symptomRules.js";
 import { loadAnimalHospitals } from "./services/publicDataHospitalService.js";
 import { loadSymptomDictionary } from "./services/publicDataSymptomService.js";
 import { recordPetPhotoObservation } from "./services/photoRecordService.js";
+import { recordFoodIngestionEvent } from "./services/foodIngestionRecordService.js";
 import { withSafetyMessage } from "./utils/safetyMessage.js";
 
 const PORT = parsePort(process.env.PORT);
@@ -324,6 +325,38 @@ function createMcpServer(): McpServer {
     },
     async (input) => {
       const result = withSafetyMessage(await recordPetPhotoObservation(input));
+      return toToolResponse(result);
+    },
+  );
+
+  server.registerTool(
+    "record_food_ingestion_event",
+    {
+      title: "Record Food Ingestion Event",
+      description:
+        "Records a dog food ingestion event and prepares a veterinary consultation summary in MeongCareNote MCP(멍케어노트 MCP).",
+      annotations: {
+        title: "Record Food Ingestion Event",
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: false,
+      },
+      inputSchema: {
+        dogName: z.string().optional(),
+        weightKg: z.number().positive().optional(),
+        foodName: z.string().min(1, "음식명을 입력해 주세요."),
+        foodDetail: z.string().optional(),
+        amount: z.string().optional(),
+        eatenAt: z.string().optional(),
+        photoUrl: z.string().url().optional(),
+        imageBase64: z.string().optional(),
+        currentSymptoms: z.array(z.string()).optional(),
+        ownerMemo: z.string().optional(),
+      },
+    },
+    async (input) => {
+      const result = withSafetyMessage(await recordFoodIngestionEvent(input));
       return toToolResponse(result);
     },
   );
