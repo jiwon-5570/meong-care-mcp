@@ -8,7 +8,7 @@ import type {
   StoredPhotoRecord,
 } from "../types/photoRecord.js";
 
-const PHOTO_RECORDS_PATH = path.join(process.cwd(), "src", "data", "photoRecords.json");
+const DEFAULT_PHOTO_RECORDS_PATH = path.join(process.cwd(), "src", "data", "photoRecords.json");
 const BASE64_PREVIEW_LENGTH = 32;
 
 export async function recordPetPhotoObservation(
@@ -53,15 +53,16 @@ export async function recordPetPhotoObservation(
 }
 
 async function appendPhotoRecord(record: StoredPhotoRecord): Promise<void> {
-  await mkdir(path.dirname(PHOTO_RECORDS_PATH), { recursive: true });
+  const photoRecordsPath = getPhotoRecordsPath();
+  await mkdir(path.dirname(photoRecordsPath), { recursive: true });
   const records = await readExistingPhotoRecords();
   records.push(record);
-  await writeFile(PHOTO_RECORDS_PATH, `${JSON.stringify(records, null, 2)}\n`, "utf8");
+  await writeFile(photoRecordsPath, `${JSON.stringify(records, null, 2)}\n`, "utf8");
 }
 
 async function readExistingPhotoRecords(): Promise<StoredPhotoRecord[]> {
   try {
-    const body = await readFile(PHOTO_RECORDS_PATH, "utf8");
+    const body = await readFile(getPhotoRecordsPath(), "utf8");
     const parsed: unknown = JSON.parse(body);
 
     if (!Array.isArray(parsed)) {
@@ -72,6 +73,18 @@ async function readExistingPhotoRecords(): Promise<StoredPhotoRecord[]> {
   } catch {
     return [];
   }
+}
+
+function getPhotoRecordsPath(): string {
+  const configuredPath = process.env.PHOTO_RECORDS_PATH?.trim();
+
+  if (configuredPath !== undefined && configuredPath.length > 0) {
+    return path.isAbsolute(configuredPath)
+      ? configuredPath
+      : path.join(process.cwd(), configuredPath);
+  }
+
+  return DEFAULT_PHOTO_RECORDS_PATH;
 }
 
 function isStoredPhotoRecord(value: unknown): value is StoredPhotoRecord {

@@ -235,6 +235,32 @@ npm start
 
 `npm start`는 `dist/index.js`를 실행합니다. 서버 포트는 `PORT` 환경 변수를 사용합니다. `PORT`가 없거나 잘못된 값이면 기본값 `3000`으로 실행됩니다.
 
+## Docker 실행
+
+카카오클라우드 Git 소스 빌드를 위해 루트에 `Dockerfile`을 제공합니다.
+
+로컬 이미지 빌드:
+
+```bash
+docker build -t meong-care-mcp .
+```
+
+로컬 컨테이너 실행:
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e PORT=3000 \
+  -e USE_PUBLIC_DATA_API=false \
+  -e USE_SYMPTOM_PUBLIC_DATA=false \
+  meong-care-mcp
+```
+
+Windows PowerShell에서는 줄바꿈 없이 실행해도 됩니다.
+
+```powershell
+docker run --rm -p 3000:3000 -e PORT=3000 -e USE_PUBLIC_DATA_API=false -e USE_SYMPTOM_PUBLIC_DATA=false meong-care-mcp
+```
+
 ## Health Check
 
 ```bash
@@ -299,6 +325,19 @@ https://your-domain.example/mcp
 3. `GET /health` 응답 확인
 4. PlayMCP endpoint에 `/mcp` 경로 등록
 5. `tools/list`에서 7개 tool 노출 확인
+
+## KakaoCloud Git 소스 빌드
+
+카카오클라우드 PlayMCP in KC 화면에서 Git 소스 빌드를 사용할 때는 아래 값을 입력합니다.
+
+- Git URL: `https://github.com/jiwon-5570/meong-care-mcp`
+- 브랜치 / ref: `main`
+- Dockerfile 경로: `Dockerfile`
+- 컨테이너 포트: `3000`
+- Health check path: `/health`
+- MCP endpoint path: `/mcp`
+
+상세 배포 메모는 [kakao-cloud-deploy.md](./kakao-cloud-deploy.md)를 참고하세요.
 
 ## 배포 체크리스트
 

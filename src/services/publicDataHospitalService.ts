@@ -15,6 +15,7 @@ interface HospitalLoadResult {
 }
 
 const SAMPLE_DATA_PATHS = [
+  path.join(process.cwd(), "data", "animalHospitals.sample.json"),
   path.join(process.cwd(), "src", "data", "animalHospitals.sample.json"),
   path.join(process.cwd(), "dist", "data", "animalHospitals.sample.json"),
 ];

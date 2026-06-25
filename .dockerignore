@@ -1,0 +1,13 @@
+.git
+.gitignore
+.env
+node_modules
+dist
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+Dockerfile
+README.md
+demo-prompts.md
+submission-summary.md

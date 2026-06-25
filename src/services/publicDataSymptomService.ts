@@ -18,6 +18,7 @@ interface SymptomDictionaryLoadResult {
 }
 
 const SAMPLE_DATA_PATHS = [
+  path.join(process.cwd(), "data", "symptomDictionary.sample.json"),
   path.join(process.cwd(), "src", "data", "symptomDictionary.sample.json"),
   path.join(process.cwd(), "dist", "data", "symptomDictionary.sample.json"),
 ];
