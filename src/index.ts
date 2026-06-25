@@ -100,7 +100,14 @@ function createMcpServer(): McpServer {
     {
       title: "Check Dog Food Safety",
       description:
-        "반려견이 먹은 음식의 위험도를 확인하고 보호자가 취해야 할 행동을 안내합니다.",
+        "Checks dog food safety risk and guardian actions in MeongCareNote MCP(멍케어노트 MCP).",
+      annotations: {
+        title: "Check Dog Food Safety",
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
       inputSchema: {
         foodName: z.string().min(1, "음식명을 입력해 주세요."),
         amount: z.string().optional(),
@@ -117,7 +124,15 @@ function createMcpServer(): McpServer {
     "analyze_daily_status",
     {
       title: "Analyze Daily Dog Status",
-      description: "반려견의 오늘 상태를 바탕으로 위험도를 분류합니다.",
+      description:
+        "Classifies a dog's daily care risk level from appetite, stool, vomiting, and energy inputs in MeongCareNote MCP(멍케어노트 MCP).",
+      annotations: {
+        title: "Analyze Daily Dog Status",
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
       inputSchema: {
         dogName: z.string().min(1, "반려견 이름을 입력해 주세요."),
         ageYears: z.number().min(0).optional(),
@@ -165,7 +180,14 @@ function createMcpServer(): McpServer {
     {
       title: "Recommend Daily Dog Care",
       description:
-        "위험도와 주요 증상을 바탕으로 오늘의 식단, 산책, 휴식 관리 행동을 추천합니다.",
+        "Recommends daily diet, water, walk, and rest actions from risk level and symptoms in MeongCareNote MCP(멍케어노트 MCP).",
+      annotations: {
+        title: "Recommend Daily Dog Care",
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
       inputSchema: {
         dogName: z.string().min(1, "반려견 이름을 입력해 주세요."),
         riskLevel: z.enum(["normal", "watch", "vet_consult", "urgent"]),
@@ -189,7 +211,15 @@ function createMcpServer(): McpServer {
     "create_vet_visit_summary",
     {
       title: "Create Vet Visit Summary",
-      description: "동물병원 상담 시 보여줄 수 있는 증상 요약문을 생성합니다.",
+      description:
+        "Creates a concise veterinary visit summary from symptoms and care context in MeongCareNote MCP(멍케어노트 MCP).",
+      annotations: {
+        title: "Create Vet Visit Summary",
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
       inputSchema: {
         dogName: z.string().min(1, "반려견 이름을 입력해 주세요."),
         ageYears: z.number().min(0).optional(),
@@ -215,7 +245,14 @@ function createMcpServer(): McpServer {
     {
       title: "Find Nearby Animal Hospitals",
       description:
-        "공공데이터 또는 로컬 샘플 데이터를 사용해 입력 지역 근처 동물병원 후보를 안내합니다.",
+        "Finds animal hospital candidates by region using public data or local fallback data in MeongCareNote MCP(멍케어노트 MCP).",
+      annotations: {
+        title: "Find Nearby Animal Hospitals",
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
       inputSchema: {
         region: z.string().min(1, "검색할 지역을 입력해 주세요."),
         maxResults: z.number().int().min(1).max(10).optional(),
@@ -236,7 +273,14 @@ function createMcpServer(): McpServer {
     {
       title: "Classify Pet Symptom",
       description:
-        "보호자가 자연어로 입력한 증상 표현을 표준 증상명과 카테고리로 정리합니다. 질병명을 예측하지 않습니다.",
+        "Normalizes guardian symptom text into symptom names and categories without diagnosis in MeongCareNote MCP(멍케어노트 MCP).",
+      annotations: {
+        title: "Classify Pet Symptom",
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
       inputSchema: {
         text: z.string().min(1, "증상 표현을 입력해 주세요."),
         animalType: z.enum(["dog", "cat", "unknown"]).optional(),
@@ -256,7 +300,14 @@ function createMcpServer(): McpServer {
     {
       title: "Record Pet Photo Observation",
       description:
-        "반려견 변 또는 피부 사진 기록을 저장하고, 보호자가 입력한 관찰 내용을 바탕으로 이상 징후와 위험도를 정리합니다.",
+        "Records stool or skin photo observations and summarizes visible concern signs in MeongCareNote MCP(멍케어노트 MCP).",
+      annotations: {
+        title: "Record Pet Photo Observation",
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: false,
+      },
       inputSchema: {
         dogName: z.string().optional(),
         photoType: z.enum(["stool", "skin"]),
