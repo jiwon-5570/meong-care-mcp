@@ -14,7 +14,10 @@ interface HospitalLoadResult {
   dataNotice: string;
 }
 
-const SAMPLE_DATA_PATH = path.join(process.cwd(), "src", "data", "animalHospitals.sample.json");
+const SAMPLE_DATA_PATHS = [
+  path.join(process.cwd(), "src", "data", "animalHospitals.sample.json"),
+  path.join(process.cwd(), "dist", "data", "animalHospitals.sample.json"),
+];
 
 export async function loadAnimalHospitals(
   region: string,
@@ -138,8 +141,19 @@ async function fetchPublicAnimalHospitals(
 }
 
 async function loadSampleHospitals(): Promise<AnimalHospital[]> {
-  const body = await readFile(SAMPLE_DATA_PATH, "utf8");
-  const parsed: unknown = JSON.parse(body);
+  const body = await readFirstExistingFile(SAMPLE_DATA_PATHS);
+
+  if (body === undefined) {
+    return [];
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return [];
+  }
 
   if (!Array.isArray(parsed)) {
     return [];
@@ -148,6 +162,18 @@ async function loadSampleHospitals(): Promise<AnimalHospital[]> {
   return parsed
     .map((item) => normalizeHospitalItem(item, "local_sample"))
     .filter((item): item is AnimalHospital => item !== undefined);
+}
+
+async function readFirstExistingFile(paths: string[]): Promise<string | undefined> {
+  for (const filePath of paths) {
+    try {
+      return await readFile(filePath, "utf8");
+    } catch {
+      // Try the next known runtime path.
+    }
+  }
+
+  return undefined;
 }
 
 function readHospitalServiceConfig(): HospitalServiceConfig {

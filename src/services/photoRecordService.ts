@@ -37,7 +37,11 @@ export async function recordPetPhotoObservation(
     createdAt: now.toISOString(),
   };
 
-  await appendPhotoRecord(record);
+  try {
+    await appendPhotoRecord(record);
+  } catch {
+    analysis.photoLimitations = `${analysis.photoLimitations} 사진 기록 파일 저장에 실패해 이번 응답에서만 기록 정보를 제공합니다.`;
+  }
 
   return {
     photoRecordId: id,

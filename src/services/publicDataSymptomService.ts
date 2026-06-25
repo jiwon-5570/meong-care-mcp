@@ -17,7 +17,10 @@ interface SymptomDictionaryLoadResult {
   dataNotice: string;
 }
 
-const SAMPLE_DATA_PATH = path.join(process.cwd(), "src", "data", "symptomDictionary.sample.json");
+const SAMPLE_DATA_PATHS = [
+  path.join(process.cwd(), "src", "data", "symptomDictionary.sample.json"),
+  path.join(process.cwd(), "dist", "data", "symptomDictionary.sample.json"),
+];
 
 export async function loadSymptomDictionary(): Promise<SymptomDictionaryLoadResult> {
   const config = readSymptomServiceConfig();
@@ -98,8 +101,19 @@ async function fetchPublicSymptomDictionary(apiUrl: string): Promise<SymptomDict
 }
 
 async function loadLocalSymptomDictionary(): Promise<SymptomDictionaryEntry[]> {
-  const body = await readFile(SAMPLE_DATA_PATH, "utf8");
-  const parsed: unknown = JSON.parse(body);
+  const body = await readFirstExistingFile(SAMPLE_DATA_PATHS);
+
+  if (body === undefined) {
+    return [];
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return [];
+  }
 
   if (!Array.isArray(parsed)) {
     return [];
@@ -108,6 +122,18 @@ async function loadLocalSymptomDictionary(): Promise<SymptomDictionaryEntry[]> {
   return parsed
     .map(normalizeSymptomDictionaryItem)
     .filter((item): item is SymptomDictionaryEntry => item !== undefined);
+}
+
+async function readFirstExistingFile(paths: string[]): Promise<string | undefined> {
+  for (const filePath of paths) {
+    try {
+      return await readFile(filePath, "utf8");
+    } catch {
+      // Try the next known runtime path.
+    }
+  }
+
+  return undefined;
 }
 
 function readSymptomServiceConfig(): SymptomServiceConfig {

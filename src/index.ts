@@ -22,7 +22,7 @@ import { loadSymptomDictionary } from "./services/publicDataSymptomService.js";
 import { recordPetPhotoObservation } from "./services/photoRecordService.js";
 import { withSafetyMessage } from "./utils/safetyMessage.js";
 
-const PORT = Number(process.env.PORT ?? 3000);
+const PORT = parsePort(process.env.PORT);
 const MCP_ENDPOINT = "/mcp";
 
 const app = express();
@@ -303,6 +303,21 @@ function getMcpSessionId(req: Request): string | undefined {
   }
 
   return rawSessionId;
+}
+
+function parsePort(value: string | undefined): number {
+  if (value === undefined || value.trim().length === 0) {
+    return 3000;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535) {
+    console.warn(`Invalid PORT value "${value}". Falling back to 3000.`);
+    return 3000;
+  }
+
+  return parsed;
 }
 
 function toToolResponse(payload: unknown) {
