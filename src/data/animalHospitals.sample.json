@@ -1,0 +1,86 @@
+[
+  {
+    "name": "부산진구 멍케어동물병원 샘플",
+    "address": "부산광역시 부산진구 중앙대로 000",
+    "businessStatus": "영업중",
+    "phoneNumber": "051-000-0001",
+    "licenseDate": "2018-03-12"
+  },
+  {
+    "name": "서면 반려동물의료센터 샘플",
+    "address": "부산광역시 부산진구 서전로 000",
+    "businessStatus": "영업중",
+    "phoneNumber": "051-000-0002",
+    "licenseDate": "2020-06-05"
+  },
+  {
+    "name": "해운대 바다동물병원 샘플",
+    "address": "부산광역시 해운대구 해운대로 000",
+    "businessStatus": "영업중",
+    "phoneNumber": "051-000-0003",
+    "licenseDate": "2017-11-22"
+  },
+  {
+    "name": "센텀 반려동물클리닉 샘플",
+    "address": "부산광역시 해운대구 센텀중앙로 000",
+    "businessStatus": "영업중",
+    "phoneNumber": "051-000-0004",
+    "licenseDate": "2019-09-18"
+  },
+  {
+    "name": "진주 강변동물병원 샘플",
+    "address": "경상남도 진주시 진주대로 000",
+    "businessStatus": "영업중",
+    "phoneNumber": "055-000-0005",
+    "licenseDate": "2016-01-14"
+  },
+  {
+    "name": "진주 반려동물메디컬센터 샘플",
+    "address": "경상남도 진주시 동진로 000",
+    "businessStatus": "영업중",
+    "phoneNumber": "055-000-0006",
+    "licenseDate": "2021-04-09"
+  },
+  {
+    "name": "창원 중앙동물병원 샘플",
+    "address": "경상남도 창원시 성산구 중앙대로 000",
+    "businessStatus": "영업중",
+    "phoneNumber": "055-000-0007",
+    "licenseDate": "2015-08-27"
+  },
+  {
+    "name": "마산 합포동물의료원 샘플",
+    "address": "경상남도 창원시 마산합포구 3.15대로 000",
+    "businessStatus": "영업중",
+    "phoneNumber": "055-000-0008",
+    "licenseDate": "2014-12-03"
+  },
+  {
+    "name": "강남 반려동물병원 샘플",
+    "address": "서울특별시 강남구 테헤란로 000",
+    "businessStatus": "영업중",
+    "phoneNumber": "02-000-0009",
+    "licenseDate": "2022-02-15"
+  },
+  {
+    "name": "논현 동물메디컬센터 샘플",
+    "address": "서울특별시 강남구 학동로 000",
+    "businessStatus": "영업중",
+    "phoneNumber": "02-000-0010",
+    "licenseDate": "2013-07-30"
+  },
+  {
+    "name": "역삼 펫케어동물병원 샘플",
+    "address": "서울특별시 강남구 역삼로 000",
+    "businessStatus": "휴업",
+    "phoneNumber": "02-000-0011",
+    "licenseDate": "2011-05-21"
+  },
+  {
+    "name": "부산 해운대 야간응급동물병원 샘플",
+    "address": "부산광역시 해운대구 좌동순환로 000",
+    "businessStatus": "영업중",
+    "phoneNumber": "051-000-0012",
+    "licenseDate": "2023-10-10"
+  }
+]
