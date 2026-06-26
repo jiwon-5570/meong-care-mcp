@@ -31,6 +31,7 @@ export interface VetVisitSummaryInput {
   energy?: string;
   foodOrSnackToday?: string[];
   ownerConcern?: string;
+  missingInfoQuestions?: string[];
 }
 
 export interface VetVisitSummaryResult {
@@ -99,8 +100,8 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
       dogName: input.dogName,
       riskLevel: input.riskLevel,
       dietManagement: symptomContext.hasDigestiveSignal
-        ? "오늘은 평소 먹던 사료를 중심으로 주고, 소화에 부담될 수 있는 음식은 피해주세요."
-        : "평소 식단을 유지하되 새로운 음식은 소량이라도 신중하게 주세요.",
+        ? "오늘은 평소 먹던 사료를 중심으로 단순하게 관리하고, 소화에 부담될 수 있는 음식은 피해주세요."
+        : "평소 식단은 유지하되 새로운 음식은 소량이라도 신중하게 주세요.",
       snackRestriction: "가급적 제한: 증상이 사라질 때까지 간식은 적게 주는 편이 좋습니다.",
       waterCheck: buildWaterCheck(symptomContext, input.weightKg),
       walkIntensity: symptomContext.hasRespiratorySignal
@@ -139,21 +140,19 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
 
 export function createVetVisitSummary(input: VetVisitSummaryInput): VetVisitSummaryResult {
   const foodOrSnackToday = input.foodOrSnackToday ?? [];
-  const startedAt = input.symptomStartedAt ?? "미입력";
-  const symptoms = input.symptoms.length > 0 ? input.symptoms : ["미입력"];
+  const startedAt = cleanText(input.symptomStartedAt) ?? "확인 필요";
+  const symptoms = input.symptoms.length > 0 ? input.symptoms : ["확인 필요"];
   const profile = [
     input.dogName,
-    input.ageYears !== undefined ? `${input.ageYears}살` : undefined,
-    input.weightKg !== undefined ? `${input.weightKg}kg` : undefined,
-  ]
-    .filter((item): item is string => item !== undefined)
-    .join(" / ");
+    input.ageYears !== undefined ? `${input.ageYears}살` : "나이 확인 필요",
+    input.weightKg !== undefined ? `${input.weightKg}kg` : "몸무게 확인 필요",
+  ].join(" / ");
 
   const status = {
-    appetite: input.appetite ?? "미입력",
-    stool: input.stool ?? "미입력",
-    vomiting: input.vomiting ?? "미입력",
-    energy: input.energy ?? "미입력",
+    appetite: cleanText(input.appetite) ?? "확인 필요",
+    stool: cleanText(input.stool) ?? "확인 필요",
+    vomiting: cleanText(input.vomiting) ?? "확인 필요",
+    energy: cleanText(input.energy) ?? "확인 필요",
   };
 
   const summaryParts = [
@@ -161,12 +160,14 @@ export function createVetVisitSummary(input: VetVisitSummaryInput): VetVisitSumm
     `주요 증상: ${symptoms.join(", ")}`,
     `증상 시작 시점: ${startedAt}`,
     `식욕: ${status.appetite}, 변: ${status.stool}, 구토: ${status.vomiting}, 활동량: ${status.energy}`,
-    `오늘 먹은 음식/간식: ${foodOrSnackToday.length > 0 ? foodOrSnackToday.join(", ") : "미입력"}`,
+    `오늘 먹은 음식/간식: ${foodOrSnackToday.length > 0 ? foodOrSnackToday.join(", ") : "확인 필요"}`,
   ];
 
   if (input.ownerConcern !== undefined && input.ownerConcern.trim().length > 0) {
     summaryParts.push(`보호자 걱정: ${input.ownerConcern.trim()}`);
   }
+
+  const missingInfoQuestions = input.missingInfoQuestions ?? [];
 
   return {
     vetVisitSummary: summaryParts.join("\n"),
@@ -174,12 +175,13 @@ export function createVetVisitSummary(input: VetVisitSummaryInput): VetVisitSumm
     symptomStartedAt: startedAt,
     foodOrSnackToday,
     status,
-    questionsForVet: [
-      "현재 증상에서 우선 확인해야 할 위험 신호는 무엇인가요?",
+    questionsForVet: uniqueStrings([
+      "현재 증상에서 우선 확인해야 할 위험 신호가 무엇인지 상담하고 싶습니다.",
       "오늘 식단, 물 섭취, 산책은 어떻게 조절하면 좋을까요?",
       "어떤 변화가 보이면 바로 다시 연락하거나 방문해야 하나요?",
-      "오늘 먹은 음식이나 간식이 증상과 관련될 가능성이 있나요?",
-    ],
+      "오늘 먹은 음식이나 간식이 현재 상태와 관련될 수 있는지 궁금합니다.",
+      ...missingInfoQuestions.map((question) => `추가 확인 필요: ${question}`),
+    ]),
   };
 }
 
@@ -194,8 +196,8 @@ function getSymptomContext(mainSymptoms: string[]): SymptomContext {
   const symptomText = mainSymptoms.join(" ");
 
   return {
-    hasDigestiveSignal: containsAny(symptomText, ["구토", "설사", "변", "식욕", "먹은"]),
-    hasSkinOrEyeSignal: containsAny(symptomText, ["가려움", "눈물", "눈곱", "피부", "털"]),
+    hasDigestiveSignal: containsAny(symptomText, ["구토", "설사", "변", "식욕", "먹은", "음식"]),
+    hasSkinOrEyeSignal: containsAny(symptomText, ["가려움", "눈물", "눈곱", "피부", "붉"]),
     hasRespiratorySignal: containsAny(symptomText, ["기침", "호흡", "켁켁", "콜록"]),
     hasLowEnergySignal: containsAny(symptomText, ["무기력", "활동량", "처짐", "기운"]),
   };
@@ -207,16 +209,14 @@ function buildDietManagementForConsult(context: SymptomContext): string {
   }
 
   if (context.hasSkinOrEyeSignal) {
-    return "새 간식이나 새 영양제처럼 최근 바뀐 음식이 있다면 기록하고 잠시 추가 급여를 피해주세요.";
+    return "새 간식이나 새 영양제처럼 최근 바뀐 음식이 있다면 기록하고 일시적으로 추가 급여를 피해주세요.";
   }
 
   return "평소 식단은 유지하되 새로운 음식 추가는 잠시 미뤄 주세요.";
 }
 
 function buildWaterCheck(context: SymptomContext, weightKg: number | undefined): string {
-  const weightNote = weightKg !== undefined
-    ? ` 현재 입력된 몸무게는 ${weightKg}kg입니다.`
-    : "";
+  const weightNote = weightKg !== undefined ? ` 현재 입력된 몸무게는 ${weightKg}kg입니다.` : "";
 
   if (context.hasDigestiveSignal) {
     return `물 섭취량과 소변 횟수가 평소보다 줄었는지 기록해 주세요.${weightNote}`;
@@ -255,7 +255,7 @@ function buildAgeCareNote(ageYears: number | undefined): string | undefined {
   }
 
   if (ageYears >= 10) {
-    return "노령견은 같은 증상도 부담이 클 수 있어 변화가 이어지면 더 이르게 상담을 고려해 주세요.";
+    return "노령견은 같은 증상도 부담이 될 수 있어 변화가 이어지면 더 이르게 상담을 고려해 주세요.";
   }
 
   return undefined;
@@ -270,5 +270,24 @@ function containsAny(text: string, keywords: string[]): boolean {
 }
 
 function buildSymptomsToMonitor(baseSymptoms: string[], fallbackSymptoms: string[]): string[] {
-  return Array.from(new Set([...baseSymptoms, ...fallbackSymptoms]));
+  return uniqueStrings([...baseSymptoms, ...fallbackSymptoms]);
+}
+
+function cleanText(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    ),
+  );
 }

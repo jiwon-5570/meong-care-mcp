@@ -25,6 +25,7 @@
 - 음식 안전 확인
 - 위험 음식 섭취 기록 및 병원 상담용 요약 생성
 - 오늘 상태 분석
+- 입력 정보가 부족한 상태에서도 임시 위험도, 확인 질문, 보호자 안내 생성
 - 통합 일상 케어 노트 생성
 - 식단, 물 섭취, 산책, 휴식 관리 추천
 - 동물병원 상담용 증상 요약문 생성
@@ -49,8 +50,8 @@
 | Tool | 역할 |
 | --- | --- |
 | `check_food_safety` | 음식명을 기준으로 `safe`, `caution`, `danger`, `unknown` 위험도를 분류하고 보호자 행동을 안내합니다. |
-| `analyze_daily_status` | 식욕, 변, 구토, 활동량, 증상 기간, 위험 음식 섭취 여부를 바탕으로 오늘 상태 위험도를 분류합니다. |
-| `create_daily_care_note` | 오늘 상태 입력 한 번으로 위험도, 식단, 산책, 휴식, 관찰 항목, 병원 상담용 요약을 함께 생성합니다. |
+| `analyze_daily_status` | 식욕, 변, 구토, 활동량, 증상 기간, 위험 음식 섭취 여부를 바탕으로 오늘 상태 위험도를 분류합니다. 입력이 부족하면 확인 질문과 임시 판단을 함께 제공합니다. |
+| `create_daily_care_note` | 오늘 상태 입력 한 번으로 위험도, 식단, 산책, 휴식, 관찰 항목, 병원 상담용 요약, 부족한 정보 질문을 함께 생성합니다. |
 | `recommend_daily_care` | 위험도와 주요 증상을 바탕으로 오늘의 식단, 물 섭취, 산책, 휴식 관리 행동을 추천합니다. |
 | `create_vet_visit_summary` | 동물병원 상담 시 보여줄 수 있는 증상 요약문과 질문 목록을 생성합니다. |
 | `summarize_pet_chat_for_vet` | 사용자가 제공한 가족 대화 내용, 보호자 메모, 또는 캡처에서 추출된 텍스트를 바탕으로 반려견 상태를 정리하고 동물병원 상담용 요약을 생성합니다. 카카오톡 채팅방을 직접 조회하지 않습니다. |
@@ -60,6 +61,19 @@
 | `record_food_ingestion_event` | 위험할 수 있는 음식 섭취 상황을 구조화해 기록하고 병원 상담용 요약을 생성합니다. |
 
 모든 tool은 PlayMCP 권장 metadata 규칙에 맞춰 `name`, `description`, `inputSchema`, `annotations`를 포함합니다.
+
+## 입력이 부족한 상태에서도 안내
+
+카카오톡 대화에서는 보호자가 모든 필드를 한 번에 말하지 않는 경우가 많습니다. 멍케어노트 MCP는 `analyze_daily_status`와 `create_daily_care_note`에서 필수 입력이 부족해도 요청을 실패시키지 않고 다음 정보를 반환합니다.
+
+- 현재 확인된 정보
+- 부족한 정보 질문
+- 보호자 문장에서 추정한 식욕, 변, 구토, 활동량 상태
+- 현재 입력 기준의 임시 위험도 판단
+- 오늘 바로 할 수 있는 관리 행동
+- 병원 상담용 임시 요약
+
+예를 들어 “우리 강아지가 좀 이상해요”만 입력해도 식욕, 변 상태, 구토 여부, 활동량, 증상 시작 시점, 최근 먹은 음식, 나이와 몸무게를 확인해 달라는 질문을 제공합니다. “밥을 반만 먹고 변이 묽어요. 구토는 없어요”처럼 일부 정보가 있으면 식욕 감소와 묽은 변을 추정하고, 부족한 활동량이나 시작 시점을 추가로 묻습니다.
 
 ## Tool 상세
 
@@ -97,35 +111,48 @@
 
 ### `analyze_daily_status`
 
-반려견의 오늘 상태를 바탕으로 위험도를 분류합니다.
+반려견의 오늘 상태를 바탕으로 위험도를 분류합니다. 보호자가 “우리 강아지가 좀 이상해요”, “밥을 안 먹어요”처럼 일부 정보만 말해도 서버가 실패하지 않고 현재까지 확인된 정보, 부족한 정보, 추가 질문, 임시 위험도 판단을 반환합니다.
 
 입력:
 
-- `dogName: string`
+- `dogName?: string`
 - `ageYears?: number`
 - `weightKg?: number`
-- `appetite: "normal" | "less" | "none" | "increased"`
-- `stool: "normal" | "soft" | "diarrhea" | "bloody" | "unknown"`
-- `vomiting: "none" | "once" | "multiple"`
-- `energy: "normal" | "low" | "very_low"`
+- `appetite?: "normal" | "less" | "none" | "increased" | "unknown"`
+- `stool?: "normal" | "soft" | "diarrhea" | "bloody" | "unknown"`
+- `vomiting?: "none" | "once" | "multiple" | "unknown"`
+- `energy?: "normal" | "low" | "very_low" | "unknown"`
 - `coughing?: boolean`
 - `itching?: boolean`
 - `eyeDischarge?: boolean`
 - `foodOrSnackToday?: string[]`
 - `symptomStartedAt?: string`
+- `ownerConcern?: string`
+
+출력:
+
+- 반려견 이름. 이름이 없으면 `반려견`으로 표시
+- 위험도: `normal` | `watch` | `vet_consult` | `urgent`
+- 판단 이유
+- 주요 증상
+- 확인된 정보 `knownInfo`
+- 부족한 정보 질문 `missingInfoQuestions`
+- 현재 임시 판단 `currentAssessment`
+- 오늘 관리 권장사항
+- 안전 문구
 
 위험도:
 
 - `urgent`: 혈변, 반복 구토, 매우 무기력, 식욕 전혀 없음, 위험 음식 섭취
 - `vet_consult`: 이상 신호 2개 이상, 증상 지속, 어린 강아지/노령견의 이상 신호
 - `watch`: 이상 신호 1개 또는 묽은 변
-- `normal`: 뚜렷한 이상 입력 없음
+- `normal`: 식욕, 변, 구토, 활동량이 명확히 정상으로 확인된 경우
 
 ### `create_daily_care_note`
 
-카카오톡에서 가장 자연스럽게 쓰기 위한 통합 tool입니다. 보호자가 오늘 상태를 한 번에 말하면 위험도 분석, 오늘 관리 행동, 병원 상담용 요약을 함께 생성합니다.
+카카오톡에서 가장 자연스럽게 쓰기 위한 통합 tool입니다. 보호자가 오늘 상태를 한 번에 말하면 위험도 분석, 오늘 관리 행동, 병원 상담용 요약을 함께 생성합니다. 입력이 부족해도 우선 관찰 또는 상담 필요 여부를 임시로 안내하고, 보호자가 이어서 답할 수 있는 질문을 제시합니다.
 
-입력은 `analyze_daily_status`와 동일하며 `ownerConcern?: string`을 추가로 받을 수 있습니다.
+입력은 `analyze_daily_status`와 동일합니다. `ownerConcern`만 있어도 동작합니다.
 
 출력:
 
@@ -133,6 +160,10 @@
 - 위험도
 - 판단 이유
 - 주요 증상
+- 확인된 정보
+- 부족한 정보 질문
+- 현재 임시 판단
+- 카카오톡에서 읽기 쉬운 보호자 안내문
 - 오늘 식단/간식/물/산책/휴식 관리
 - 관찰할 증상
 - 병원 상담용 요약
@@ -178,6 +209,7 @@
 - `energy?: string`
 - `foodOrSnackToday?: string[]`
 - `ownerConcern?: string`
+- `missingInfoQuestions?: string[]`
 
 출력:
 
@@ -186,7 +218,7 @@
 - 증상 시작 시점
 - 먹은 음식
 - 식욕/변/구토/활동량 상태
-- 수의사에게 물어볼 질문 목록
+- 수의사에게 물어볼 질문 목록. 부족한 정보 질문이 있으면 함께 포함
 - 안전 문구
 
 ### `summarize_pet_chat_for_vet`

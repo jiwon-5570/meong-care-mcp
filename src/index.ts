@@ -141,7 +141,7 @@ function createMcpServer(): McpServer {
     async (input) => {
       const analysis = analyzeDailyStatus(input);
       const care = recommendDailyCare({
-        dogName: input.dogName,
+        dogName: analysis.dogName,
         riskLevel: analysis.riskLevel,
         mainSymptoms: analysis.mainSymptoms,
         weightKg: input.weightKg,
@@ -152,6 +152,10 @@ function createMcpServer(): McpServer {
         dogName: analysis.dogName,
         riskLevel: analysis.riskLevel,
         reasons: analysis.reasons,
+        mainSymptoms: analysis.mainSymptoms,
+        knownInfo: analysis.knownInfo,
+        missingInfoQuestions: analysis.missingInfoQuestions,
+        currentAssessment: analysis.currentAssessment,
         todayCareRecommendations: [
           care.dietManagement,
           care.snackRestriction,
@@ -178,10 +182,7 @@ function createMcpServer(): McpServer {
         openWorldHint: false,
         idempotentHint: true,
       },
-      inputSchema: {
-        ...dailyStatusSchema(),
-        ownerConcern: z.string().optional(),
-      },
+      inputSchema: dailyStatusSchema(),
     },
     async (input) => {
       const result = withSafetyMessage(createDailyCareNote(input));
@@ -246,6 +247,7 @@ function createMcpServer(): McpServer {
         energy: z.string().optional(),
         foodOrSnackToday: z.array(z.string()).optional(),
         ownerConcern: z.string().optional(),
+        missingInfoQuestions: z.array(z.string()).optional(),
       },
     },
     async (input) => {
@@ -410,18 +412,19 @@ function createMcpServer(): McpServer {
 
 function dailyStatusSchema() {
   return {
-    dogName: z.string().min(1, "반려견 이름을 입력해 주세요."),
+    dogName: z.string().optional(),
     ageYears: z.number().min(0).optional(),
     weightKg: z.number().positive().optional(),
-    appetite: z.enum(["normal", "less", "none", "increased"]),
-    stool: z.enum(["normal", "soft", "diarrhea", "bloody", "unknown"]),
-    vomiting: z.enum(["none", "once", "multiple"]),
-    energy: z.enum(["normal", "low", "very_low"]),
+    appetite: z.enum(["normal", "less", "none", "increased", "unknown"]).optional(),
+    stool: z.enum(["normal", "soft", "diarrhea", "bloody", "unknown"]).optional(),
+    vomiting: z.enum(["none", "once", "multiple", "unknown"]).optional(),
+    energy: z.enum(["normal", "low", "very_low", "unknown"]).optional(),
     coughing: z.boolean().optional(),
     itching: z.boolean().optional(),
     eyeDischarge: z.boolean().optional(),
     foodOrSnackToday: z.array(z.string()).optional(),
     symptomStartedAt: z.string().optional(),
+    ownerConcern: z.string().optional(),
   };
 }
 

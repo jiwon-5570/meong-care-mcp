@@ -1,12 +1,28 @@
 import { checkFoodSafety } from "./foodRules.js";
 
-export type AppetiteStatus = "normal" | "less" | "none" | "increased";
+export type AppetiteStatus = "normal" | "less" | "none" | "increased" | "unknown";
 export type StoolStatus = "normal" | "soft" | "diarrhea" | "bloody" | "unknown";
-export type VomitingStatus = "none" | "once" | "multiple";
-export type EnergyStatus = "normal" | "low" | "very_low";
+export type VomitingStatus = "none" | "once" | "multiple" | "unknown";
+export type EnergyStatus = "normal" | "low" | "very_low" | "unknown";
 export type DailyRiskLevel = "normal" | "watch" | "vet_consult" | "urgent";
 
 export interface DailyStatusInput {
+  dogName?: string;
+  ageYears?: number;
+  weightKg?: number;
+  appetite?: AppetiteStatus;
+  stool?: StoolStatus;
+  vomiting?: VomitingStatus;
+  energy?: EnergyStatus;
+  coughing?: boolean;
+  itching?: boolean;
+  eyeDischarge?: boolean;
+  foodOrSnackToday?: string[];
+  symptomStartedAt?: string;
+  ownerConcern?: string;
+}
+
+export interface NormalizedDailyStatusInput {
   dogName: string;
   ageYears?: number;
   weightKg?: number;
@@ -17,8 +33,9 @@ export interface DailyStatusInput {
   coughing?: boolean;
   itching?: boolean;
   eyeDischarge?: boolean;
-  foodOrSnackToday?: string[];
+  foodOrSnackToday: string[];
   symptomStartedAt?: string;
+  ownerConcern?: string;
 }
 
 export interface DailyStatusAnalysis {
@@ -26,143 +43,240 @@ export interface DailyStatusAnalysis {
   riskLevel: DailyRiskLevel;
   reasons: string[];
   mainSymptoms: string[];
+  knownInfo: string[];
+  missingInfoQuestions: string[];
+  currentAssessment: string;
+}
+
+interface DangerousFoodSignal {
+  foods: string[];
+  reason: string;
+}
+
+const DANGEROUS_FOOD_KEYWORDS = [
+  "초콜릿",
+  "초코",
+  "다크초콜릿",
+  "카카오",
+  "포도",
+  "샤인머스캣",
+  "건포도",
+  "포도즙",
+  "포도주스",
+  "양파",
+  "마늘",
+  "대파",
+  "쪽파",
+  "자일리톨",
+  "커피",
+  "카페인",
+  "알코올",
+  "술",
+  "맥주",
+  "마카다미아",
+  "아보카도",
+  "이스트",
+  "발효반죽",
+];
+
+export function normalizeDailyStatusInput(input: DailyStatusInput): NormalizedDailyStatusInput {
+  const ownerConcern = cleanOptional(input.ownerConcern);
+  const normalizedConcern = normalizeText(ownerConcern ?? "");
+
+  return {
+    dogName: cleanOptional(input.dogName) ?? "반려견",
+    ageYears: input.ageYears,
+    weightKg: input.weightKg,
+    appetite: input.appetite ?? inferAppetiteStatus(normalizedConcern) ?? "unknown",
+    stool: input.stool ?? inferStoolStatus(normalizedConcern) ?? "unknown",
+    vomiting: input.vomiting ?? inferVomitingStatus(normalizedConcern) ?? "unknown",
+    energy: input.energy ?? inferEnergyStatus(normalizedConcern) ?? "unknown",
+    coughing: input.coughing ?? inferBooleanSignal(normalizedConcern, ["기침", "콜록", "켁켁", "숨소리"]),
+    itching: input.itching ?? inferBooleanSignal(normalizedConcern, ["가려", "긁", "핥", "피부"]),
+    eyeDischarge: input.eyeDischarge ?? inferBooleanSignal(normalizedConcern, ["눈곱", "눈물", "눈이붉", "눈충혈"]),
+    foodOrSnackToday: normalizeStringList(input.foodOrSnackToday),
+    symptomStartedAt: cleanOptional(input.symptomStartedAt),
+    ownerConcern,
+  };
 }
 
 export function analyzeDailyStatus(input: DailyStatusInput): DailyStatusAnalysis {
-  const urgentReasons = collectUrgentReasons(input);
-  const dangerousFoodReasons = collectDangerousFoodReasons(input);
+  const normalized = normalizeDailyStatusInput(input);
+  const dangerousFoodSignal = collectDangerousFoodSignal(normalized);
+  const urgentReasons = collectUrgentReasons(normalized, dangerousFoodSignal);
+  const abnormalReasons = collectNonUrgentAbnormalReasons(normalized);
+  const contextualReasons = collectContextualConcernReasons(normalized, abnormalReasons.length);
+  const missingInfoQuestions = buildMissingInfoQuestions(input, normalized, dangerousFoodSignal);
+  const knownInfo = buildKnownInfo(input, normalized, dangerousFoodSignal);
+  const hasVagueConcernOnly = hasVagueConcern(normalized.ownerConcern) && abnormalReasons.length === 0;
 
-  if (urgentReasons.length > 0 || dangerousFoodReasons.length > 0) {
+  if (urgentReasons.length > 0) {
     const reasons = [
       "빠른 동물병원 상담 권장 신호가 포함되어 있습니다.",
       ...urgentReasons,
-      ...dangerousFoodReasons,
     ];
 
     return {
-      dogName: input.dogName,
+      dogName: normalized.dogName,
       riskLevel: "urgent",
       reasons,
-      mainSymptoms: removeIntroReason(reasons),
+      mainSymptoms: buildMainSymptoms(normalized, dangerousFoodSignal, urgentReasons),
+      knownInfo,
+      missingInfoQuestions,
+      currentAssessment: buildCurrentAssessment("urgent"),
     };
   }
 
-  const abnormalReasons = collectNonUrgentAbnormalReasons(input);
-  const contextualReasons = collectContextualConcernReasons(input, abnormalReasons.length);
-  const consultReasons = [...abnormalReasons, ...contextualReasons];
+  if (countConsultSignals(normalized) >= 2 || contextualReasons.length > 0) {
+    const reasons = [
+      countConsultSignals(normalized) >= 2
+        ? "동물병원 상담을 고려할 만한 이상 신호가 2개 이상 입력되었거나 추정됩니다."
+        : "증상 기간, 나이, 상태 조합상 동물병원 상담을 고려하는 것이 좋습니다.",
+      ...abnormalReasons,
+      ...contextualReasons,
+    ];
 
-  if (countConsultSignals(input) >= 2 || abnormalReasons.length >= 2 || contextualReasons.length > 0) {
     return {
-      dogName: input.dogName,
+      dogName: normalized.dogName,
       riskLevel: "vet_consult",
-      reasons: [
-        countConsultSignals(input) >= 2 || abnormalReasons.length >= 2
-          ? "동물병원 상담을 권장할 수 있는 이상 신호가 2개 이상 함께 입력되었습니다."
-          : "증상 기간이나 반려견 조건상 동물병원 상담을 고려하는 것이 좋습니다.",
-        ...consultReasons,
-      ],
-      mainSymptoms: consultReasons,
+      reasons,
+      mainSymptoms: buildMainSymptoms(normalized, dangerousFoodSignal, abnormalReasons),
+      knownInfo,
+      missingInfoQuestions,
+      currentAssessment: buildCurrentAssessment("vet_consult"),
     };
   }
 
-  if (abnormalReasons.length === 1) {
+  if (abnormalReasons.length > 0 || hasVagueConcernOnly || hasOnlyMissingInformation(normalized, input)) {
+    const reasons = abnormalReasons.length > 0
+      ? abnormalReasons
+      : ["구체적인 증상 정보가 부족해 보수적으로 관찰 단계로 분류했습니다."];
+
     return {
-      dogName: input.dogName,
+      dogName: normalized.dogName,
       riskLevel: "watch",
-      reasons: abnormalReasons,
-      mainSymptoms: abnormalReasons,
+      reasons,
+      mainSymptoms: buildMainSymptoms(normalized, dangerousFoodSignal, reasons),
+      knownInfo,
+      missingInfoQuestions,
+      currentAssessment: buildCurrentAssessment("watch"),
     };
   }
 
   return {
-    dogName: input.dogName,
+    dogName: normalized.dogName,
     riskLevel: "normal",
-    reasons: ["식욕, 변, 구토, 활동량에서 뚜렷한 이상 신호가 입력되지 않았습니다."],
+    reasons: ["식욕, 변, 구토, 활동량에 뚜렷한 이상 신호가 입력되지 않았습니다."],
     mainSymptoms: [],
+    knownInfo,
+    missingInfoQuestions,
+    currentAssessment: buildCurrentAssessment("normal"),
   };
 }
 
-function collectUrgentReasons(input: DailyStatusInput): string[] {
+function collectUrgentReasons(
+  input: NormalizedDailyStatusInput,
+  dangerousFoodSignal: DangerousFoodSignal,
+): string[] {
   const reasons: string[] = [];
 
   if (input.stool === "bloody") {
-    reasons.push("혈변이 있습니다.");
+    reasons.push("혈변으로 보이는 변 상태가 입력되었거나 추정됩니다.");
   }
 
   if (input.vomiting === "multiple") {
-    reasons.push("구토가 반복되었습니다.");
+    reasons.push("구토가 반복된 것으로 입력되었거나 추정됩니다.");
   }
 
   if (input.energy === "very_low") {
-    reasons.push("매우 무기력합니다.");
+    reasons.push("매우 무기력하거나 반응이 떨어지는 상태로 입력되었거나 추정됩니다.");
   }
 
   if (input.appetite === "none") {
-    reasons.push("식욕이 전혀 없습니다.");
+    reasons.push("식욕이 전혀 없는 상태로 입력되었거나 추정됩니다.");
+  }
+
+  if (dangerousFoodSignal.foods.length > 0) {
+    reasons.push(dangerousFoodSignal.reason);
   }
 
   return reasons;
 }
 
-function collectDangerousFoodReasons(input: DailyStatusInput): string[] {
-  const foods = input.foodOrSnackToday ?? [];
-  const dangerousFoods = foods.filter(
-    (food) => checkFoodSafety({ foodName: food, dogWeightKg: input.weightKg }).riskLevel === "danger",
-  );
+function collectDangerousFoodSignal(input: NormalizedDailyStatusInput): DangerousFoodSignal {
+  const foodCandidates = [
+    ...input.foodOrSnackToday,
+    ...(input.ownerConcern !== undefined ? [input.ownerConcern] : []),
+  ];
+  const dangerousFoods = new Set<string>();
 
-  if (dangerousFoods.length === 0) {
-    return [];
+  for (const candidate of foodCandidates) {
+    const result = checkFoodSafety({ foodName: candidate, dogWeightKg: input.weightKg });
+
+    if (result.riskLevel === "danger") {
+      const extracted = extractDangerousFoodMentions(candidate);
+      if (extracted.length === 0) {
+        dangerousFoods.add(candidate);
+      } else {
+        for (const food of extracted) {
+          dangerousFoods.add(food);
+        }
+      }
+    }
   }
 
-  return [
-    `오늘 먹은 음식/간식 중 위험 음식으로 분류되는 항목이 있습니다: ${dangerousFoods.join(", ")}.`,
-  ];
+  const foods = Array.from(dangerousFoods);
+
+  return {
+    foods,
+    reason: foods.length > 0
+      ? `위험 음식 섭취 가능성이 있습니다: ${foods.join(", ")}. 빠른 동물병원 상담 권장 상황입니다.`
+      : "",
+  };
 }
 
-function collectNonUrgentAbnormalReasons(input: DailyStatusInput): string[] {
+function collectNonUrgentAbnormalReasons(input: NormalizedDailyStatusInput): string[] {
   const reasons: string[] = [];
 
   if (input.stool === "diarrhea") {
-    reasons.push("설사가 있습니다.");
+    reasons.push("설사가 입력되었거나 추정됩니다.");
   } else if (input.stool === "soft") {
-    reasons.push("변이 묽습니다.");
-  } else if (input.stool === "unknown") {
-    reasons.push("변 상태를 아직 확인하지 못했습니다.");
+    reasons.push("변이 묽거나 무른 상태로 입력되었거나 추정됩니다.");
   }
 
   if (input.vomiting === "once") {
-    reasons.push("구토가 1회 있었습니다.");
+    reasons.push("구토가 1회 있었던 것으로 입력되었거나 추정됩니다.");
   }
 
   if (input.appetite === "less") {
-    reasons.push("식욕이 감소했습니다.");
+    reasons.push("식욕 감소가 입력되었거나 추정됩니다.");
   } else if (input.appetite === "increased") {
-    reasons.push("식욕이 평소보다 증가했습니다.");
+    reasons.push("식욕이 평소보다 증가한 것으로 입력되었거나 추정됩니다.");
   }
 
   if (input.energy === "low") {
-    reasons.push("활동량이 감소했습니다.");
+    reasons.push("활동량 감소 또는 무기력이 입력되었거나 추정됩니다.");
   }
 
   if (input.coughing === true) {
-    reasons.push("기침이 있습니다.");
+    reasons.push("기침이 입력되었거나 추정됩니다.");
   }
 
   if (input.itching === true) {
-    reasons.push("가려움이 있습니다.");
+    reasons.push("가려움 또는 피부 불편감이 입력되었거나 추정됩니다.");
   }
 
   if (input.eyeDischarge === true) {
-    reasons.push("눈물이나 눈곱이 있습니다.");
+    reasons.push("눈물 또는 눈곱이 입력되었거나 추정됩니다.");
   }
 
   return reasons;
 }
 
-function countConsultSignals(input: DailyStatusInput): number {
+function countConsultSignals(input: NormalizedDailyStatusInput): number {
   let count = 0;
 
-  if (input.stool === "diarrhea") count += 1;
+  if (input.stool === "diarrhea" || input.stool === "soft") count += 1;
   if (input.vomiting === "once") count += 1;
   if (input.appetite === "less") count += 1;
   if (input.energy === "low") count += 1;
@@ -174,7 +288,7 @@ function countConsultSignals(input: DailyStatusInput): number {
 }
 
 function collectContextualConcernReasons(
-  input: DailyStatusInput,
+  input: NormalizedDailyStatusInput,
   abnormalReasonCount: number,
 ): string[] {
   if (abnormalReasonCount === 0) {
@@ -183,8 +297,8 @@ function collectContextualConcernReasons(
 
   const reasons: string[] = [];
 
-  if (hasDurationConcern(input.symptomStartedAt)) {
-    reasons.push("증상이 하루 이상 지속되었거나 계속되는 것으로 입력되었습니다.");
+  if (hasDurationConcern(input.symptomStartedAt) || hasDurationConcern(input.ownerConcern)) {
+    reasons.push("증상이 하루 이상 지속되었거나 계속되는 것으로 보이는 표현이 있습니다.");
   }
 
   if (isSensitiveAge(input.ageYears)) {
@@ -192,19 +306,277 @@ function collectContextualConcernReasons(
   }
 
   if (input.vomiting === "once" && (input.stool === "diarrhea" || input.energy === "low")) {
-    reasons.push("구토가 다른 이상 신호와 함께 입력되어 관찰 강도를 높입니다.");
+    reasons.push("구토가 다른 이상 신호와 함께 입력되어 관찰 강도를 높였습니다.");
   }
 
   return reasons;
 }
 
-function hasDurationConcern(symptomStartedAt: string | undefined): boolean {
-  if (symptomStartedAt === undefined) {
+function buildKnownInfo(
+  original: DailyStatusInput,
+  input: NormalizedDailyStatusInput,
+  dangerousFoodSignal: DangerousFoodSignal,
+): string[] {
+  const knownInfo: string[] = [];
+
+  if (cleanOptional(original.dogName) !== undefined) {
+    knownInfo.push(`이름: ${input.dogName}`);
+  }
+
+  if (input.ageYears !== undefined) {
+    knownInfo.push(`나이: ${input.ageYears}살`);
+  }
+
+  if (input.weightKg !== undefined) {
+    knownInfo.push(`몸무게: ${input.weightKg}kg`);
+  }
+
+  if (input.appetite !== "unknown") {
+    knownInfo.push(`식욕: ${appetiteToKorean(input.appetite)}로 추정합니다.`);
+  }
+
+  if (input.stool !== "unknown") {
+    knownInfo.push(`변 상태: ${stoolToKorean(input.stool)}로 추정합니다.`);
+  }
+
+  if (input.vomiting !== "unknown") {
+    knownInfo.push(`구토: ${vomitingToKorean(input.vomiting)}로 추정합니다.`);
+  }
+
+  if (input.energy !== "unknown") {
+    knownInfo.push(`활동량: ${energyToKorean(input.energy)}로 추정합니다.`);
+  }
+
+  if (input.symptomStartedAt !== undefined) {
+    knownInfo.push(`증상 시작 시점: ${input.symptomStartedAt}`);
+  } else if (hasDurationConcern(input.ownerConcern)) {
+    knownInfo.push("증상 기간: 보호자 표현에 지속 또는 시작 시점 단서가 있습니다.");
+  }
+
+  if (input.foodOrSnackToday.length > 0) {
+    knownInfo.push(`최근 음식/간식: ${input.foodOrSnackToday.join(", ")}`);
+  }
+
+  if (dangerousFoodSignal.foods.length > 0) {
+    knownInfo.push(`위험 음식 가능성: ${dangerousFoodSignal.foods.join(", ")}`);
+  }
+
+  if (input.ownerConcern !== undefined) {
+    knownInfo.push(`보호자 메모: ${truncate(input.ownerConcern, 80)}`);
+  }
+
+  if (knownInfo.length === 0) {
+    knownInfo.push("구체적으로 확인된 정보가 아직 부족합니다.");
+  }
+
+  return knownInfo;
+}
+
+function buildMissingInfoQuestions(
+  original: DailyStatusInput,
+  input: NormalizedDailyStatusInput,
+  dangerousFoodSignal: DangerousFoodSignal,
+): string[] {
+  const questions: string[] = [];
+
+  if (cleanOptional(original.dogName) === undefined) {
+    questions.push("반려견 이름을 알려주세요.");
+  }
+
+  if (input.symptomStartedAt === undefined && !hasDurationConcern(input.ownerConcern)) {
+    questions.push("증상이 언제 시작됐는지 알려주세요. 예: 방금, 30분 전, 어제부터");
+  }
+
+  if (input.appetite === "unknown") {
+    questions.push("식욕은 어떤가요? 예: 평소와 같음, 덜 먹음, 전혀 안 먹음");
+  }
+
+  if (input.stool === "unknown") {
+    questions.push("변 상태를 알려주세요. 예: 정상, 묽은 변, 설사, 혈변, 확인 못함");
+  }
+
+  if (input.vomiting === "unknown") {
+    questions.push("구토가 있었는지 알려주세요. 예: 없음, 1회, 여러 번");
+  }
+
+  if (input.energy === "unknown") {
+    questions.push("활동량은 어떤가요? 예: 평소와 같음, 낮음, 매우 무기력함");
+  }
+
+  if (input.foodOrSnackToday.length === 0 && dangerousFoodSignal.foods.length === 0) {
+    questions.push("최근 먹은 음식이나 간식, 위험할 수 있는 음식 섭취 여부를 알려주세요.");
+  }
+
+  if (input.ageYears === undefined || input.weightKg === undefined) {
+    questions.push("반려견 나이와 몸무게를 알려주세요.");
+  }
+
+  return uniqueStrings(questions);
+}
+
+function buildMainSymptoms(
+  input: NormalizedDailyStatusInput,
+  dangerousFoodSignal: DangerousFoodSignal,
+  fallbackReasons: string[],
+): string[] {
+  const symptoms: string[] = [];
+
+  if (input.appetite === "less") symptoms.push("식욕 감소");
+  if (input.appetite === "none") symptoms.push("식욕 없음");
+  if (input.appetite === "increased") symptoms.push("식욕 증가");
+  if (input.stool === "soft") symptoms.push("묽은 변");
+  if (input.stool === "diarrhea") symptoms.push("설사");
+  if (input.stool === "bloody") symptoms.push("혈변");
+  if (input.vomiting === "once") symptoms.push("구토 1회");
+  if (input.vomiting === "multiple") symptoms.push("반복 구토");
+  if (input.energy === "low") symptoms.push("활동량 감소");
+  if (input.energy === "very_low") symptoms.push("매우 무기력");
+  if (input.coughing === true) symptoms.push("기침");
+  if (input.itching === true) symptoms.push("가려움");
+  if (input.eyeDischarge === true) symptoms.push("눈물/눈곱");
+
+  for (const food of dangerousFoodSignal.foods) {
+    symptoms.push(`위험 음식 섭취 가능성: ${food}`);
+  }
+
+  if (symptoms.length === 0 && hasVagueConcern(input.ownerConcern)) {
+    symptoms.push("보호자 걱정 또는 평소와 다른 상태");
+  }
+
+  if (symptoms.length === 0 && fallbackReasons.length > 0) {
+    symptoms.push(...fallbackReasons);
+  }
+
+  return uniqueStrings(symptoms);
+}
+
+function buildCurrentAssessment(riskLevel: DailyRiskLevel): string {
+  if (riskLevel === "urgent") {
+    return "현재 입력에는 빠른 동물병원 상담을 권장할 수 있는 신호가 포함되어 있습니다.";
+  }
+
+  if (riskLevel === "vet_consult") {
+    return "현재 입력에는 동물병원 상담을 고려할 만한 이상 신호가 있습니다.";
+  }
+
+  if (riskLevel === "watch") {
+    return "현재 입력만으로는 관찰이 필요한 상태로 보이며, 추가 정보 확인이 필요합니다.";
+  }
+
+  return "현재 입력만으로는 뚜렷한 이상 신호가 많지 않지만, 부족한 정보를 확인해 주세요.";
+}
+
+function inferAppetiteStatus(normalizedText: string): AppetiteStatus | undefined {
+  if (hasAny(normalizedText, ["전혀안먹", "하나도안먹", "아예안먹"])) {
+    return "none";
+  }
+
+  if (
+    hasAny(normalizedText, [
+      "밥을안먹",
+      "밥안먹",
+      "사료안먹",
+      "사료를안먹",
+      "식욕없음",
+      "식욕이없",
+      "거의안먹",
+      "반만먹",
+      "덜먹",
+      "조금만먹",
+      "입맛없",
+    ])
+  ) {
+    return "less";
+  }
+
+  if (hasAny(normalizedText, ["식욕정상", "밥잘먹", "사료잘먹", "평소처럼먹"])) {
+    return "normal";
+  }
+
+  if (hasAny(normalizedText, ["식욕증가", "계속먹", "많이먹", "먹을걸찾"])) {
+    return "increased";
+  }
+
+  return undefined;
+}
+
+function inferStoolStatus(normalizedText: string): StoolStatus | undefined {
+  if (hasAny(normalizedText, ["혈변", "피가섞", "피섞인변", "검붉은변", "붉은변"])) {
+    return "bloody";
+  }
+
+  if (hasAny(normalizedText, ["설사", "물설사", "물이많은변"])) {
+    return "diarrhea";
+  }
+
+  if (hasAny(normalizedText, ["묽은변", "변이묽", "무른변", "물적", "묽어", "변이무르"])) {
+    return "soft";
+  }
+
+  if (hasAny(normalizedText, ["변정상", "정상변", "응가정상"])) {
+    return "normal";
+  }
+
+  return undefined;
+}
+
+function inferVomitingStatus(normalizedText: string): VomitingStatus | undefined {
+  if (hasAny(normalizedText, ["계속토", "여러번토", "반복구토", "구토여러번", "토를여러번", "구토반복"])) {
+    return "multiple";
+  }
+
+  if (hasAny(normalizedText, ["한번토", "한번토했", "1번토", "구토한번", "구토1회", "토한번"])) {
+    return "once";
+  }
+
+  if (hasAny(normalizedText, ["구토는없어", "구토없음", "토는안", "토하지않", "토는없어", "구토안함"])) {
+    return "none";
+  }
+
+  return undefined;
+}
+
+function inferEnergyStatus(normalizedText: string): EnergyStatus | undefined {
+  if (hasAny(normalizedText, ["일어나지못", "반응이없", "축늘어", "쓰러", "의식", "기절"])) {
+    return "very_low";
+  }
+
+  if (
+    hasAny(normalizedText, [
+      "축처져",
+      "기운없",
+      "계속누워",
+      "움직이지",
+      "힘이없",
+      "무기력",
+      "활동량감소",
+      "처져있",
+    ])
+  ) {
+    return "low";
+  }
+
+  if (hasAny(normalizedText, ["활동량정상", "잘놀", "평소처럼움직"])) {
+    return "normal";
+  }
+
+  return undefined;
+}
+
+function inferBooleanSignal(normalizedText: string, keywords: string[]): boolean | undefined {
+  if (normalizedText.length === 0) {
+    return undefined;
+  }
+
+  return hasAny(normalizedText, keywords) ? true : undefined;
+}
+
+function hasDurationConcern(value: string | undefined): boolean {
+  if (value === undefined) {
     return false;
   }
 
-  const normalized = symptomStartedAt.trim().toLowerCase().replace(/\s+/g, "");
-  const durationKeywords = [
+  return hasAny(normalizeText(value), [
     "어제",
     "하루",
     "1일",
@@ -216,15 +588,127 @@ function hasDurationConcern(symptomStartedAt: string | undefined): boolean {
     "계속",
     "지속",
     "밤새",
-  ];
+    "아침부터",
+    "점심부터",
+    "저녁부터",
+    "전부터",
+  ]);
+}
 
-  return durationKeywords.some((keyword) => normalized.includes(keyword));
+function hasVagueConcern(value: string | undefined): boolean {
+  if (value === undefined) {
+    return false;
+  }
+
+  return hasAny(normalizeText(value), ["이상해", "평소와달라", "걱정돼", "걱정되", "상태가안좋", "컨디션이안좋"]);
+}
+
+function hasOnlyMissingInformation(input: NormalizedDailyStatusInput, original: DailyStatusInput): boolean {
+  const allUnknown =
+    input.appetite === "unknown" &&
+    input.stool === "unknown" &&
+    input.vomiting === "unknown" &&
+    input.energy === "unknown" &&
+    input.coughing !== true &&
+    input.itching !== true &&
+    input.eyeDischarge !== true &&
+    input.foodOrSnackToday.length === 0;
+
+  return allUnknown && (
+    Object.keys(original).length === 0 ||
+    original.ownerConcern !== undefined ||
+    original.dogName !== undefined ||
+    original.ageYears !== undefined ||
+    original.weightKg !== undefined
+  );
 }
 
 function isSensitiveAge(ageYears: number | undefined): boolean {
   return ageYears !== undefined && (ageYears < 1 || ageYears >= 10);
 }
 
-function removeIntroReason(reasons: string[]): string[] {
-  return reasons.slice(1);
+function extractDangerousFoodMentions(text: string): string[] {
+  const normalizedText = normalizeText(text);
+  return DANGEROUS_FOOD_KEYWORDS.filter((keyword) => normalizedText.includes(normalizeText(keyword)));
+}
+
+function appetiteToKorean(value: AppetiteStatus): string {
+  const labels: Record<AppetiteStatus, string> = {
+    normal: "정상",
+    less: "감소",
+    none: "없음",
+    increased: "증가",
+    unknown: "확인 필요",
+  };
+
+  return labels[value];
+}
+
+function stoolToKorean(value: StoolStatus): string {
+  const labels: Record<StoolStatus, string> = {
+    normal: "정상",
+    soft: "묽은 변",
+    diarrhea: "설사",
+    bloody: "혈변",
+    unknown: "확인 필요",
+  };
+
+  return labels[value];
+}
+
+function vomitingToKorean(value: VomitingStatus): string {
+  const labels: Record<VomitingStatus, string> = {
+    none: "없음",
+    once: "1회",
+    multiple: "반복",
+    unknown: "확인 필요",
+  };
+
+  return labels[value];
+}
+
+function energyToKorean(value: EnergyStatus): string {
+  const labels: Record<EnergyStatus, string> = {
+    normal: "정상",
+    low: "낮음",
+    very_low: "매우 낮음",
+    unknown: "확인 필요",
+  };
+
+  return labels[value];
+}
+
+function normalizeStringList(values: string[] | undefined): string[] {
+  return uniqueStrings(values ?? []);
+}
+
+function hasAny(normalizedText: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => normalizedText.includes(normalizeText(keyword)));
+}
+
+function normalizeText(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function cleanOptional(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    ),
+  );
+}
+
+function truncate(value: string, maxLength: number): string {
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength)}...`;
 }

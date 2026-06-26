@@ -95,6 +95,22 @@ const toolCases = [
     },
   },
   {
+    name: "analyze_daily_status",
+    args: {
+      ownerConcern: "몽이가 아침부터 밥을 거의 안 먹어요.",
+    },
+    assert: (payload) => {
+      assert(payload.dogName === "반려견", "analyze_daily_status should default dogName to 반려견.");
+      assert(Array.isArray(payload.knownInfo), "analyze_daily_status should include knownInfo.");
+      assert(Array.isArray(payload.missingInfoQuestions), "analyze_daily_status should include missingInfoQuestions.");
+      assert(typeof payload.currentAssessment === "string", "analyze_daily_status should include currentAssessment.");
+      assert(
+        ["watch", "vet_consult"].includes(payload.riskLevel),
+        "analyze_daily_status should classify incomplete appetite concern as watch or vet_consult.",
+      );
+    },
+  },
+  {
     name: "create_daily_care_note",
     args: {
       dogName: "몽이",
@@ -111,6 +127,24 @@ const toolCases = [
       assert(payload.riskLevel === "vet_consult", "create_daily_care_note should classify persistent symptoms as vet_consult.");
       assert(typeof payload.nextAction === "string", "create_daily_care_note should include nextAction.");
       assert(typeof payload.vetConsultPreparation?.vetVisitSummary === "string", "create_daily_care_note should include vet summary.");
+    },
+  },
+  {
+    name: "create_daily_care_note",
+    args: {
+      ownerConcern: "우리 강아지가 밥을 안 먹고 계속 누워 있어요.",
+    },
+    assert: (payload) => {
+      assert(payload.dogName === "반려견", "create_daily_care_note should default dogName to 반려견.");
+      assert(
+        ["watch", "vet_consult"].includes(payload.riskLevel),
+        "create_daily_care_note should classify incomplete concern as watch or vet_consult.",
+      );
+      assert(
+        Array.isArray(payload.missingInfoQuestions) && payload.missingInfoQuestions.length >= 3,
+        "create_daily_care_note should include follow-up questions for incomplete input.",
+      );
+      assert(typeof payload.userFriendlyGuide === "string", "create_daily_care_note should include userFriendlyGuide.");
     },
   },
   {

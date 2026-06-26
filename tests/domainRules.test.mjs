@@ -76,6 +76,64 @@ test("daily status rules elevate urgent and contextual consultation cases", () =
   );
 });
 
+test("daily status analysis handles vague or incomplete guardian input", () => {
+  const vague = analyzeDailyStatus({
+    ownerConcern: "우리 강아지가 좀 이상해요.",
+  });
+
+  assert.equal(vague.dogName, "반려견");
+  assert.equal(vague.riskLevel, "watch");
+  assert.ok(vague.missingInfoQuestions.length >= 4);
+  assert.match(vague.currentAssessment, /추가 정보|관찰/);
+
+  const appetiteOnly = analyzeDailyStatus({
+    dogName: "몽이",
+    ownerConcern: "몽이가 아침부터 밥을 거의 안 먹어요.",
+  });
+
+  assert.ok(["watch", "vet_consult"].includes(appetiteOnly.riskLevel));
+  assert.ok(
+    appetiteOnly.mainSymptoms.some((symptom) => symptom.includes("식욕")) ||
+      appetiteOnly.knownInfo.some((info) => info.includes("식욕") && info.includes("감소")),
+  );
+  assert.ok(appetiteOnly.missingInfoQuestions.some((question) => question.includes("구토")));
+  assert.ok(appetiteOnly.missingInfoQuestions.some((question) => question.includes("변 상태")));
+  assert.ok(appetiteOnly.missingInfoQuestions.some((question) => question.includes("활동량")));
+});
+
+test("daily status analysis infers mixed digestive symptoms from owner concern", () => {
+  const analysis = analyzeDailyStatus({
+    dogName: "몽이",
+    ageYears: 6,
+    weightKg: 11,
+    ownerConcern: "밥을 반만 먹고 변이 묽어요. 구토는 없어요.",
+  });
+
+  assert.equal(analysis.riskLevel, "vet_consult");
+  assert.ok(analysis.knownInfo.some((info) => info.includes("식욕") && info.includes("감소")));
+  assert.ok(analysis.knownInfo.some((info) => info.includes("변 상태") && info.includes("묽은 변")));
+  assert.ok(analysis.knownInfo.some((info) => info.includes("구토") && info.includes("없음")));
+  assert.ok(
+    analysis.missingInfoQuestions.some((question) => question.includes("증상이 언제")) ||
+      analysis.missingInfoQuestions.some((question) => question.includes("활동량")),
+  );
+});
+
+test("daily status analysis elevates dangerous food mention in owner concern", () => {
+  const analysis = analyzeDailyStatus({
+    dogName: "몽이",
+    weightKg: 11,
+    ownerConcern: "샤인머스캣 한 알을 30분 전에 먹었어요. 아직 증상은 없어요.",
+  });
+
+  assert.equal(analysis.riskLevel, "urgent");
+  assert.match(analysis.reasons.join(" "), /위험 음식|빠른 동물병원 상담 권장/);
+  assert.ok(
+    analysis.knownInfo.some((info) => info.includes("샤인머스캣")) ||
+      analysis.mainSymptoms.some((symptom) => symptom.includes("샤인머스캣")),
+  );
+});
+
 test("daily care note combines analysis, care guidance, and vet summary", () => {
   const note = createDailyCareNote({
     dogName: "몽이",
@@ -93,6 +151,21 @@ test("daily care note combines analysis, care guidance, and vet summary", () => 
   assert.match(note.nextAction, /동물병원 상담 권장/);
   assert.match(note.vetConsultPreparation.vetVisitSummary, /몽이/);
   assert.ok(note.todayCare.symptomsToMonitor.length > 0);
+});
+
+test("daily care note handles incomplete concern with friendly guide", () => {
+  const note = createDailyCareNote({
+    ownerConcern: "우리 강아지가 밥을 안 먹고 계속 누워 있어요.",
+  });
+
+  assert.equal(note.dogName, "반려견");
+  assert.ok(["watch", "vet_consult"].includes(note.riskLevel));
+  assert.equal(typeof note.userFriendlyGuide, "string");
+  assert.ok(note.missingInfoQuestions.length >= 3);
+  assert.equal(typeof note.vetConsultPreparation.vetVisitSummary, "string");
+
+  const serialized = JSON.stringify(note);
+  assert.doesNotMatch(serialized, /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다/);
 });
 
 test("pet chat summary extracts symptoms and creates vet summary", () => {
