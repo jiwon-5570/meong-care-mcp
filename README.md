@@ -16,7 +16,7 @@
 - Dockerfile 포함
 - KakaoCloud Git 소스 빌드 대응
 - 공공데이터 API 실패 시 로컬 샘플 fallback
-- Anthropic API 설정 시 사진 관찰 보조 지원
+- 외부 생성형 AI API key 없이 사진·캡처 관찰 텍스트 구조화 지원
 - JSON 파일 기반 MVP 기록 저장
 - `npm test`, `npm run validate` 통과
 
@@ -31,10 +31,10 @@
 - 통합 일상 케어 노트 생성
 - 식단, 물 섭취, 산책, 휴식 관리 추천
 - 동물병원 상담용 증상 요약문 생성
-- 가족 대화/캡처 OCR 텍스트 기반 병원 상담용 요약 생성
+- 호스트 AI가 캡처에서 읽어낸 `chatText` 기반 병원 상담용 요약 생성
 - 지역 기반 동물병원 후보 안내
 - 자연어 증상 표현 분류
-- 변/피부 사진 관찰 기록
+- 보호자 또는 호스트 AI가 제공한 변/피부 관찰 텍스트 기록
 
 ## 의료 안전 원칙
 
@@ -42,10 +42,19 @@
 - 약을 처방하지 않습니다.
 - “이 병입니다”, “이 약을 먹이세요”, “병원 안 가도 됩니다” 같은 표현을 사용하지 않습니다.
 - 위험한 경우 “빠른 동물병원 상담 권장”, “동물병원 상담 권장”처럼 명확히 안내합니다.
-- 사진 기능은 이미지 진단이 아니라 사진 기록 및 관찰 보조 기능입니다.
+- 사진 기능은 원본 이미지를 분석하지 않고 보호자 또는 호스트 AI가 제공한 관찰 텍스트를 구조화하는 기록 보조 기능입니다.
 - 모든 MCP tool 응답에는 안전 문구가 포함됩니다.
 
 공통 안전 문구는 `src/utils/safetyMessage.ts`에서 관리합니다.
+
+## 호스트 AI 연동 구조
+
+멍케어노트 MCP는 자체적으로 외부 생성형 AI API를 호출하지 않습니다. PlayMCP 또는 카카오톡 Agent의 AI가 사용자의 텍스트, 사진 설명, 캡처에서 읽어낸 내용을 MCP tool 입력으로 전달하면, MCP는 이를 바탕으로 반려견 상태 기록, 위험도 구조화, 병원 상담용 요약을 생성합니다. 이를 통해 별도 AI API key 없이도 보안성과 배포 안정성을 높입니다.
+
+- 사진 원본의 해석은 PlayMCP/카카오톡 Agent 같은 호스트 AI의 책임입니다.
+- MCP는 `visualNotes`, `observedSigns`, `relatedSymptoms`로 전달된 관찰 텍스트만 사용합니다.
+- 캡처 OCR 또는 읽기는 호스트 AI의 책임이며, MCP는 전달된 `chatText`만 분석합니다.
+- `imageBase64`가 전달되더라도 MCP는 내용을 분석하지 않고 원문을 저장하지 않습니다.
 
 ## MCP Tool 목록
 
@@ -56,10 +65,10 @@
 | `create_daily_care_note` | 오늘 상태 입력 한 번으로 위험도, 식단, 산책, 휴식, 관찰 항목, 병원 상담용 요약, 부족한 정보 질문을 함께 생성합니다. |
 | `recommend_daily_care` | 위험도와 주요 증상을 바탕으로 오늘의 식단, 물 섭취, 산책, 휴식 관리 행동을 추천합니다. |
 | `create_vet_visit_summary` | 동물병원 상담 시 보여줄 수 있는 증상 요약문과 질문 목록을 생성합니다. |
-| `summarize_pet_chat_for_vet` | 사용자가 제공한 가족 대화 내용, 보호자 메모, 또는 캡처에서 추출된 텍스트를 바탕으로 반려견 상태를 정리하고 동물병원 상담용 요약을 생성합니다. 카카오톡 채팅방을 직접 조회하지 않습니다. |
+| `summarize_pet_chat_for_vet` | 호스트 Agent가 대화 또는 캡처에서 읽어낸 `chatText`를 바탕으로 반려견 상태를 정리하고 동물병원 상담용 요약을 생성합니다. MCP는 카카오톡을 조회하거나 캡처를 직접 OCR하지 않습니다. |
 | `find_nearby_animal_hospitals` | 지역명 기반으로 동물병원 후보를 안내합니다. 공공데이터 API 또는 로컬 샘플 데이터를 사용합니다. |
 | `classify_pet_symptom` | 보호자의 자연어 증상 표현을 증상명, 카테고리, 정규화된 표현으로 정리합니다. |
-| `record_pet_photo_observation` | 변/피부 사진과 보호자 관찰 내용을 기록하고 이상 징후를 정리합니다. |
+| `record_pet_photo_observation` | 사진 원본을 진단하거나 분석하지 않고, 보호자 또는 호스트 Agent가 제공한 관찰 텍스트를 기록해 이상 징후와 위험도를 구조화합니다. |
 | `record_food_ingestion_event` | 위험할 수 있는 음식 섭취 상황을 구조화해 기록하고 병원 상담용 요약을 생성합니다. |
 
 모든 tool은 PlayMCP 권장 metadata 규칙에 맞춰 `name`, `description`, `inputSchema`, `annotations`를 포함합니다.
@@ -104,7 +113,7 @@
 - 수의사에게 물어볼 질문
 - 진단/처방이 아니라는 안전 고지
 
-`vetShareCard`는 `create_vet_visit_summary`, `create_daily_care_note`, `record_food_ingestion_event`, `summarize_pet_chat_for_vet`, `record_pet_photo_observation` 응답에서 사용할 수 있습니다. 사진 관련 요약은 이미지 진단이 아니라 보호자 관찰 내용과 사진 기록을 정리한 보조 정보입니다.
+`vetShareCard`는 `create_vet_visit_summary`, `create_daily_care_note`, `record_food_ingestion_event`, `summarize_pet_chat_for_vet`, `record_pet_photo_observation` 응답에서 사용할 수 있습니다. 사진 관련 요약은 이미지 진단 결과가 아니라 보호자 또는 호스트 AI가 제공한 관찰 텍스트를 정리한 보조 정보입니다.
 
 ## 입력이 부족한 상태에서도 안내
 
@@ -274,13 +283,14 @@
 
 ### `summarize_pet_chat_for_vet`
 
-사용자가 제공한 가족 대화 내용, 보호자 메모, 또는 캡처에서 추출된 텍스트를 분석해 병원 상담 전 보여줄 수 있는 요약을 생성합니다.
+호스트 Agent가 대화 또는 캡처에서 읽어낸 `chatText`를 분석해 병원 상담 전 보여줄 수 있는 요약을 생성합니다.
 
 중요:
 
 - 카카오톡 채팅방을 직접 조회하지 않습니다.
 - 카카오톡 방 목록, 메시지, 가족방 대화 내역을 서버가 가져오지 않습니다.
-- 사용자가 직접 붙여넣은 텍스트 또는 Agent/OCR이 캡처 이미지에서 읽어낸 텍스트만 분석합니다.
+- 캡처 이미지를 MCP가 직접 OCR하지 않습니다.
+- 사용자가 직접 붙여넣은 텍스트 또는 호스트 Agent가 캡처에서 읽어낸 `chatText`만 분석합니다.
 - 이미지 URL이나 `imageBase64`를 직접 입력받지 않습니다.
 - 질병 진단이나 약 처방이 아니라 병원 상담 준비를 돕는 기능입니다.
 
@@ -341,14 +351,15 @@
 
 ### `record_pet_photo_observation`
 
-변/피부 사진과 보호자 관찰 내용을 기록하고 이상 징후를 정리합니다.
+보호자 또는 호스트 Agent가 변/피부 사진에서 관찰해 전달한 텍스트를 기록하고 이상 징후를 구조화합니다.
 
 중요:
 
-- 실제 이미지 진단이 아닙니다.
-- 사진에 보이는 객관적 특징과 보호자 입력을 기록하는 보조 기능입니다.
+- 사진 원본을 진단하거나 직접 분석하지 않습니다.
+- PlayMCP/카카오톡 Agent가 사진을 이해한 뒤 `visualNotes`, `observedSigns`, `relatedSymptoms`로 전달한 내용만 사용합니다.
+- 사진에 보이는 객관적 특징을 기록하고 위험도와 병원 상담용 요약으로 구조화하는 보조 기능입니다.
 - `imageBase64`는 전체 저장하지 않고 preview 또는 `[base64 omitted]`로만 저장합니다.
-- `ANTHROPIC_API_KEY`가 있으면 Anthropic API로 사진 관찰 보조를 시도하고 실패 시 룰 기반 fallback을 사용합니다.
+- `imageBase64`와 `imageUrl`은 분석에 사용하지 않으며 외부 생성형 AI API로 전송하지 않습니다.
 
 출력:
 
@@ -420,8 +431,7 @@ meong-care-mcp/
 │  │  ├─ jsonRecordStore.ts
 │  │  ├─ photoRecordService.ts
 │  │  ├─ publicDataHospitalService.ts
-│  │  ├─ publicDataSymptomService.ts
-│  │  └─ visionAnalyzer.ts
+│  │  └─ publicDataSymptomService.ts
 │  ├─ types/
 │  │  ├─ foodIngestionRecord.ts
 │  │  └─ photoRecord.ts
@@ -530,9 +540,6 @@ USE_SYMPTOM_PUBLIC_DATA=false
 
 PHOTO_RECORDS_PATH=src/data/photoRecords.json
 FOOD_INGESTION_RECORDS_PATH=src/data/foodIngestionRecords.json
-
-ANTHROPIC_API_KEY=
-ANTHROPIC_MODEL=claude-sonnet-4-6
 ```
 
 설명:
@@ -545,18 +552,19 @@ ANTHROPIC_MODEL=claude-sonnet-4-6
 - `USE_SYMPTOM_PUBLIC_DATA`: `true`이면 증상 사전 API 사용을 시도합니다.
 - `PHOTO_RECORDS_PATH`: 사진 기록 JSON 저장 경로입니다.
 - `FOOD_INGESTION_RECORDS_PATH`: 위험 음식 섭취 기록 JSON 저장 경로입니다.
-- `ANTHROPIC_API_KEY`: Anthropic 사진 관찰 보조 API 키입니다.
-- `ANTHROPIC_MODEL`: Anthropic 모델명입니다.
 
-## Anthropic 사진 관찰 보조
+## 사진·캡처 관찰 텍스트 처리
 
-`record_pet_photo_observation`에서 `imageBase64`가 들어오고 `ANTHROPIC_API_KEY`가 설정되어 있으면 Anthropic Messages API를 호출해 사진 관찰 보조를 시도합니다.
+`record_pet_photo_observation`은 사진 원본을 직접 해석하지 않습니다. 호스트 AI가 사진에서 확인한 객관적 관찰 내용을 `visualNotes`, `observedSigns`, `relatedSymptoms`에 넣어 호출하면 MCP의 로컬 규칙이 위험도, 관리 행동, `vetShareCard`를 생성합니다.
+
+`summarize_pet_chat_for_vet`도 캡처 이미지를 직접 OCR하지 않습니다. 호스트 AI가 캡처에서 읽어낸 내용을 `chatText`로 전달하면 MCP가 증상과 시간 흐름을 구조화합니다.
 
 안전 원칙:
 
 - 병명, 원인, 치료법을 단정하지 않습니다.
-- 사진에 보이는 색상, 형태, 점액질/혈변처럼 보이는 부분, 붉은기, 각질, 탈모 범위 등 객관적 특징만 정리합니다.
-- API 호출 실패 시 서버는 죽지 않고 룰 기반 fallback 또는 실패 안내를 반환합니다.
+- 호스트 AI는 색상, 형태, 점액질/혈변처럼 보이는 부분, 붉은기, 각질, 탈모 범위 등 객관적 특징만 텍스트로 전달해야 합니다.
+- MCP는 전달받은 관찰 텍스트만 로컬 규칙으로 구조화하며 외부 생성형 AI API를 호출하지 않습니다.
+- `imageBase64` 원문은 저장하지 않고 짧은 preview 또는 `[base64 omitted]`만 기록합니다.
 
 ## 기록 데이터 저장
 
@@ -613,7 +621,7 @@ docker run --rm -p 3000:3000 --env-file .env meong-care-mcp
 - PlayMCP endpoint `/mcp` 등록
 - KakaoCloud 환경변수 설정
 - 공공데이터 API를 사용할 경우 `PUBLIC_DATA_SERVICE_KEY` 입력
-- Anthropic 사진 관찰 보조를 사용할 경우 `ANTHROPIC_API_KEY` 입력
+- 별도 생성형 AI API key가 없어도 서버 빌드와 MCP tool 실행 가능
 
 ## 데모 질문
 
@@ -622,10 +630,10 @@ docker run --rm -p 3000:3000 --env-file .env meong-care-mcp
 1. 강아지가 포도 한 알 먹었어. 몸무게는 11kg이야.
 2. 우리 강아지 6살 11kg인데 어제부터 밥을 반만 먹고 변이 묽어. 구토는 없어.
 3. 강아지가 밥을 안 먹고 축 처져 있어. 증상으로 정리해줘.
-4. 강아지 변 사진을 기록해줘. 사진상 묽은 변처럼 보이고 어제부터 밥을 덜 먹어.
+4. 강아지 변 사진에서 묽은 변처럼 보인다고 확인했어. 어제부터 밥을 덜 먹은 내용과 함께 기록해줘.
 5. 부산 진구 근처 동물병원 알려줘.
 6. 방금 증상들을 동물병원에 보여줄 수 있게 정리해줘.
-7. 가족방 대화 캡처에서 읽은 내용이야. 병원 가기 전에 정리해줘. 엄마: 몽이가 아침부터 밥을 거의 안 먹어. 동생: 변이 좀 묽은 것 같아. 나: 구토는 있었어? 엄마: 구토는 안 했는데 계속 누워 있어. 몽이는 6살이고 11kg이야.
+7. 호스트 Agent가 가족방 캡처에서 읽은 내용이야. 병원 가기 전에 정리해줘. 엄마: 몽이가 아침부터 밥을 거의 안 먹어. 동생: 변이 좀 묽은 것 같아. 나: 구토는 있었어? 엄마: 구토는 안 했는데 계속 누워 있어. 몽이는 6살이고 11kg이야.
 8. 가족방에서 샤인머스캣 한 알을 30분 전에 먹었다고 했어. 아직 증상은 없대. 병원 상담용으로 정리해줘.
 
 ## 제출 요약

@@ -1,5 +1,5 @@
 import { appendJsonRecord, resolveRecordFilePath } from "./jsonRecordStore.js";
-import { RuleBasedVisionAnalyzer } from "./visionAnalyzer.js";
+import { analyzePhotoObservation } from "../logic/photoRules.js";
 import type {
   PhotoObservationInput,
   PhotoObservationResult,
@@ -12,8 +12,7 @@ const BASE64_PREVIEW_LENGTH = 32;
 export async function recordPetPhotoObservation(
   input: PhotoObservationInput,
 ): Promise<PhotoObservationResult> {
-  const analyzer = new RuleBasedVisionAnalyzer();
-  const analysis = await analyzer.analyze(input);
+  const analysis = analyzePhotoObservation(input);
   const now = new Date();
   const takenAt = input.takenAt ?? now.toISOString();
   const id = createPhotoRecordId(now);

@@ -263,7 +263,7 @@ function createMcpServer(): McpServer {
     {
       title: "Summarize Pet Chat For Vet",
       description:
-        "Summarizes user-provided family chat text, guardian memo, or text extracted from a screenshot into a veterinary consultation note. It only analyzes text provided by the user, does not directly access KakaoTalk chat rooms, and does not diagnose disease or prescribe treatment in MeongCareNote MCP(멍케어노트 MCP).",
+        "Structures chatText read from a conversation or screenshot by the host Agent into a veterinary consultation note. MeongCareNote MCP(멍케어노트 MCP) does not access KakaoTalk or perform OCR, and it does not diagnose disease or prescribe treatment.",
       annotations: {
         title: "Summarize Pet Chat For Vet",
         readOnlyHint: true,
@@ -276,7 +276,10 @@ function createMcpServer(): McpServer {
         ageYears: z.number().min(0).optional(),
         weightKg: z.number().positive().optional(),
         sourceType: z.enum(["pasted_text", "screenshot_ocr", "manual_memo"]),
-        chatText: z.string().min(1, "분석할 대화 내용 또는 캡처에서 추출된 텍스트를 입력해 주세요."),
+        chatText: z
+          .string()
+          .min(1, "호스트 Agent가 대화 또는 캡처에서 읽어낸 텍스트를 입력해 주세요.")
+          .describe("Text read from a conversation or screenshot by the host Agent; MCP does not perform OCR."),
         chatStartedAt: z.string().optional(),
         chatEndedAt: z.string().optional(),
         screenshotTakenAt: z.string().optional(),
@@ -349,7 +352,7 @@ function createMcpServer(): McpServer {
     {
       title: "Record Pet Photo Observation",
       description:
-        "Records stool or skin photo observations and summarizes visible concern signs without diagnosis in MeongCareNote MCP(멍케어노트 MCP).",
+        "Records observation text supplied by a guardian or host Agent and structures concern signs without inspecting or diagnosing the original photo in MeongCareNote MCP(멍케어노트 MCP).",
       annotations: {
         title: "Record Pet Photo Observation",
         readOnlyHint: false,
@@ -360,12 +363,28 @@ function createMcpServer(): McpServer {
       inputSchema: {
         dogName: z.string().optional(),
         photoType: z.enum(["stool", "skin"]),
-        imageUrl: z.string().url().optional(),
-        imageBase64: z.string().optional(),
+        imageUrl: z
+          .string()
+          .url()
+          .optional()
+          .describe("Optional photo reference only; MCP does not fetch or analyze the image."),
+        imageBase64: z
+          .string()
+          .optional()
+          .describe("Optional photo presence record only; MCP does not analyze or store the full base64 data."),
         takenAt: z.string().optional(),
-        visualNotes: z.string().optional(),
-        observedSigns: z.array(z.string()).optional(),
-        relatedSymptoms: z.array(z.string()).optional(),
+        visualNotes: z
+          .string()
+          .optional()
+          .describe("Objective visual observations written by the guardian or extracted by the host Agent."),
+        observedSigns: z
+          .array(z.string())
+          .optional()
+          .describe("Observed signs supplied as text by the guardian or host Agent."),
+        relatedSymptoms: z
+          .array(z.string())
+          .optional()
+          .describe("Related symptoms supplied as text by the guardian or host Agent."),
         appetite: z.enum(["normal", "less", "none", "unknown"]).optional(),
         vomiting: z.enum(["none", "once", "multiple", "unknown"]).optional(),
         energy: z.enum(["normal", "low", "very_low", "unknown"]).optional(),

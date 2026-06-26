@@ -66,7 +66,7 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
       questionsForVet: buildPhotoQuestionsForVet(input.photoType, riskLevel),
     }),
     photoLimitations:
-      "사진 기록은 조명, 각도, 초점, 보호자 입력에 따라 달라질 수 있어 이미지 진단이 아닙니다. 실제 상태가 심해 보이거나 증상이 지속되면 수의사 상담을 권장합니다.",
+      "MCP는 사진 원본을 분석하거나 진단하지 않습니다. 보호자 또는 호스트 AI가 제공한 관찰 텍스트를 기록하고 구조화하며, 실제 상태가 심해 보이거나 증상이 지속되면 수의사 상담을 권장합니다.",
     hospitalSearchGuide:
       riskLevel === "vet_consult" || riskLevel === "urgent"
         ? "위험도가 vet_consult 이상이면 find_nearby_animal_hospitals tool로 가까운 동물병원을 찾고 방문 전 전화 확인을 권장합니다."
@@ -81,7 +81,7 @@ function buildPhotoMissingInfoQuestions(
   const questions: string[] = [];
 
   if (signs.length === 0) {
-    questions.push("사진에서 보호자가 관찰한 색, 형태, 범위 같은 내용을 추가로 확인해 주세요.");
+    questions.push("보호자 또는 호스트 AI가 관찰한 색, 형태, 범위 같은 내용을 텍스트로 추가해 주세요.");
   }
 
   if (input.appetite === undefined || input.appetite === "unknown") {

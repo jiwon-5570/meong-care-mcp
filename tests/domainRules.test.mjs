@@ -16,7 +16,6 @@ import {
   analyzeFoodIngestionEvent,
   buildMissingInfoQuestions,
 } from "../dist/logic/foodIngestionRules.js";
-import { analyzePetImage } from "../dist/services/visionAnalyzer.js";
 import { SAFETY_MESSAGE, withSafetyMessage } from "../dist/utils/safetyMessage.js";
 
 test("food safety rules classify high-risk and common foods", () => {
@@ -428,82 +427,19 @@ test("safety message is attached consistently", () => {
   assert.equal(withSafetyMessage({ ok: true }).safetyMessage, SAFETY_MESSAGE);
 });
 
-test("analyzePetImage returns fallback without Anthropic API key", async () => {
-  const originalApiKey = process.env.ANTHROPIC_API_KEY;
+test("photo observation uses host-provided text without inspecting imageBase64", () => {
+  const result = analyzePhotoObservation({
+    photoType: "stool",
+    imageBase64: "not-an-image-and-must-not-be-analyzed",
+    visualNotes: "호스트 Agent 관찰: 갈색의 묽은 변처럼 보임",
+    observedSigns: ["묽은 변"],
+    relatedSymptoms: ["식욕 감소"],
+    appetite: "less",
+    vomiting: "none",
+    energy: "normal",
+  });
 
-  try {
-    delete process.env.ANTHROPIC_API_KEY;
-    const result = await analyzePetImage({
-      imageBase64: "dGVzdA==",
-      photoType: "stool",
-    });
-
-    assert.deepEqual(result, {
-      visualNotes: "사진 분석에 실패했습니다.",
-      observedSigns: [],
-    });
-  } finally {
-    if (originalApiKey === undefined) {
-      delete process.env.ANTHROPIC_API_KEY;
-    } else {
-      process.env.ANTHROPIC_API_KEY = originalApiKey;
-    }
-  }
-});
-
-test("analyzePetImage parses structured Anthropic JSON response", async () => {
-  const originalApiKey = process.env.ANTHROPIC_API_KEY;
-  const originalModel = process.env.ANTHROPIC_MODEL;
-  const originalFetch = globalThis.fetch;
-
-  try {
-    process.env.ANTHROPIC_API_KEY = "test-key";
-    process.env.ANTHROPIC_MODEL = "test-model";
-    globalThis.fetch = async (_url, init) => {
-      const body = JSON.parse(String(init?.body));
-
-      assert.equal(body.model, "test-model");
-      assert.equal(body.messages[0].content[0].type, "image");
-      assert.equal(body.messages[0].content[0].source.data, "dGVzdA==");
-
-      return new Response(
-        JSON.stringify({
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                visualNotes: "갈색 변이며 일부 묽어 보입니다.",
-                observedSigns: ["묽은 변처럼 보임"],
-              }),
-            },
-          ],
-        }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      );
-    };
-
-    const result = await analyzePetImage({
-      imageBase64: "data:image/png;base64,dGVzdA==",
-      photoType: "stool",
-    });
-
-    assert.deepEqual(result, {
-      visualNotes: "갈색 변이며 일부 묽어 보입니다.",
-      observedSigns: ["묽은 변처럼 보임"],
-    });
-  } finally {
-    if (originalApiKey === undefined) {
-      delete process.env.ANTHROPIC_API_KEY;
-    } else {
-      process.env.ANTHROPIC_API_KEY = originalApiKey;
-    }
-
-    if (originalModel === undefined) {
-      delete process.env.ANTHROPIC_MODEL;
-    } else {
-      process.env.ANTHROPIC_MODEL = originalModel;
-    }
-
-    globalThis.fetch = originalFetch;
-  }
+  assert.equal(result.riskLevel, "watch");
+  assert.ok(result.observedAbnormalSigns.includes("soft"));
+  assert.match(result.photoLimitations, /사진 원본을 분석하거나 진단하지 않습니다/);
 });
