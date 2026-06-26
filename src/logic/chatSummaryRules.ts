@@ -1,5 +1,6 @@
 import { checkFoodSafety } from "./foodRules.js";
 import { buildDailyRiskPresentation, type RiskPresentation } from "./riskPresentationRules.js";
+import { buildVetShareCard, type VetShareCard } from "./vetShareCardRules.js";
 import type {
   AppetiteStatus,
   DailyRiskLevel,
@@ -42,6 +43,7 @@ export interface PetChatSummaryResult {
   riskPresentation: RiskPresentation;
   missingInfoQuestions: string[];
   vetVisitSummary: string;
+  vetShareCard: VetShareCard;
   questionsForVet: string[];
   privacyNotice: string;
 }
@@ -99,6 +101,26 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
   const timeline = extractTimeline(input, text, normalizedText);
   const missingInfoQuestions = buildMissingInfoQuestions(input, signals, timeline, normalizedText);
   const analyzedTextSummary = buildAnalyzedTextSummary(input, signals, risk.riskLevel, riskPresentation);
+  const questionsForVet = buildQuestionsForVet(signals, risk.riskLevel);
+  const vetShareCard = buildVetShareCard({
+    source: "chat_summary",
+    dogName: input.dogName,
+    ageYears: input.ageYears,
+    weightKg: input.weightKg,
+    riskLevel: risk.riskLevel,
+    riskPresentation,
+    symptoms: signals.extractedSymptoms,
+    timeline,
+    appetite: signals.appetiteStatus,
+    stool: signals.stoolStatus,
+    vomiting: signals.vomitingStatus,
+    energy: signals.energyStatus,
+    foodOrSnackToday: signals.foodMentions,
+    ownerConcern: input.ownerMemo,
+    missingInfoQuestions,
+    questionsForVet,
+    privacyNote: PRIVACY_NOTICE,
+  });
 
   return {
     sourceType: input.sourceType,
@@ -125,7 +147,8 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
       riskPresentation,
       timeline,
     ),
-    questionsForVet: buildQuestionsForVet(signals, risk.riskLevel),
+    vetShareCard,
+    questionsForVet,
     privacyNotice: PRIVACY_NOTICE,
   };
 }

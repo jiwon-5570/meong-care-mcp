@@ -4,6 +4,7 @@ import type {
   PhotoType,
 } from "../types/photoRecord.js";
 import { buildDailyRiskPresentation } from "./riskPresentationRules.js";
+import { buildVetShareCard } from "./vetShareCardRules.js";
 import type { DailyRiskLevel } from "./riskRules.js";
 
 interface SignRule {
@@ -37,17 +38,33 @@ const SKIN_SIGN_RULES: SignRule[] = [
 export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObservationAnalysis {
   const signs = extractSigns(input);
   const riskLevel = classifyPhotoRisk(input.photoType, signs, input);
+  const riskPresentation = buildDailyRiskPresentation(
+    riskLevel,
+    buildPhotoRiskReasons(input.photoType, signs, riskLevel),
+    signs,
+  );
 
   return {
     observedAbnormalSigns: signs,
     riskLevel,
     todayCareActions: buildCareActions(input.photoType, signs, riskLevel),
     vetSummary: buildVetSummary(input, signs, riskLevel),
-    riskPresentation: buildDailyRiskPresentation(
+    riskPresentation,
+    vetShareCard: buildVetShareCard({
+      source: "photo_observation",
+      dogName: input.dogName,
       riskLevel,
-      buildPhotoRiskReasons(input.photoType, signs, riskLevel),
-      signs,
-    ),
+      riskPresentation,
+      symptoms: [...(input.relatedSymptoms ?? []), ...signs],
+      observedSigns: signs,
+      photoType: input.photoType,
+      appetite: input.appetite,
+      vomiting: input.vomiting,
+      energy: input.energy,
+      ownerConcern: input.visualNotes,
+      missingInfoQuestions: buildPhotoMissingInfoQuestions(input, signs),
+      questionsForVet: buildPhotoQuestionsForVet(input.photoType, riskLevel),
+    }),
     photoLimitations:
       "사진 기록은 조명, 각도, 초점, 보호자 입력에 따라 달라질 수 있어 이미지 진단이 아닙니다. 실제 상태가 심해 보이거나 증상이 지속되면 수의사 상담을 권장합니다.",
     hospitalSearchGuide:
@@ -55,6 +72,46 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
         ? "위험도가 vet_consult 이상이면 find_nearby_animal_hospitals tool로 가까운 동물병원을 찾고 방문 전 전화 확인을 권장합니다."
         : undefined,
   };
+}
+
+function buildPhotoMissingInfoQuestions(
+  input: PhotoObservationInput,
+  signs: string[],
+): string[] {
+  const questions: string[] = [];
+
+  if (signs.length === 0) {
+    questions.push("사진에서 보호자가 관찰한 색, 형태, 범위 같은 내용을 추가로 확인해 주세요.");
+  }
+
+  if (input.appetite === undefined || input.appetite === "unknown") {
+    questions.push("식욕 변화가 있는지 확인해 주세요.");
+  }
+
+  if (input.vomiting === undefined || input.vomiting === "unknown") {
+    questions.push("구토 여부를 확인해 주세요.");
+  }
+
+  if (input.energy === undefined || input.energy === "unknown") {
+    questions.push("활동량이나 무기력 여부를 확인해 주세요.");
+  }
+
+  return questions;
+}
+
+function buildPhotoQuestionsForVet(photoType: PhotoType, riskLevel: DailyRiskLevel): string[] {
+  const target = photoType === "stool" ? "변 사진 기록" : "피부 사진 기록";
+  const questions = [
+    `${target}에서 우선 확인해야 할 위험 신호가 있는지 상담하고 싶습니다.`,
+    "사진과 함께 어떤 증상 변화를 관찰해야 하는지 알고 싶습니다.",
+    "현재 식사, 산책, 휴식 관리를 어떻게 조절하면 좋을까요?",
+  ];
+
+  if (riskLevel === "urgent" || riskLevel === "vet_consult") {
+    questions.unshift("현재 기록만으로도 빠른 상담이나 방문이 필요한지 확인하고 싶습니다.");
+  }
+
+  return questions;
 }
 
 function buildPhotoRiskReasons(

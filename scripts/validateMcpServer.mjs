@@ -160,6 +160,7 @@ const toolCases = [
       );
       assert(typeof payload.userFriendlyGuide === "string", "create_daily_care_note should include userFriendlyGuide.");
       assert(typeof payload.riskPresentation?.riskBadge === "string", "create_daily_care_note should include riskPresentation.");
+      assert(typeof payload.vetShareCard?.copyableText === "string", "create_daily_care_note should include vetShareCard.");
     },
   },
   {
@@ -190,9 +191,11 @@ const toolCases = [
       energy: "보통",
       foodOrSnackToday: ["사료"],
       ownerConcern: "어제부터 밥을 덜 먹습니다.",
+      riskLevel: "vet_consult",
     },
     assert: (payload) => {
       assert(typeof payload.vetVisitSummary === "string", "create_vet_visit_summary should include vetVisitSummary.");
+      assert(typeof payload.vetShareCard?.copyableText === "string", "create_vet_visit_summary should include vetShareCard.");
     },
   },
   {
@@ -209,6 +212,7 @@ const toolCases = [
     assert: (payload) => {
       assert(Array.isArray(payload.extractedSymptoms), "summarize_pet_chat_for_vet should include extractedSymptoms.");
       assert(typeof payload.vetVisitSummary === "string", "summarize_pet_chat_for_vet should include vetVisitSummary.");
+      assert(typeof payload.vetShareCard?.copyableText === "string", "summarize_pet_chat_for_vet should include vetShareCard.");
       assert(typeof payload.privacyNotice === "string", "summarize_pet_chat_for_vet should include privacyNotice.");
       assert(typeof payload.riskPresentation?.riskBadge === "string", "summarize_pet_chat_for_vet should include riskPresentation.");
       assert(
@@ -258,6 +262,7 @@ const toolCases = [
     assert: (payload) => {
       assert(typeof payload.photoRecordId === "string", "record_pet_photo_observation should include photoRecordId.");
       assert(typeof payload.riskPresentation?.riskBadge === "string", "record_pet_photo_observation should include riskPresentation.");
+      assert(typeof payload.vetShareCard?.copyableText === "string", "record_pet_photo_observation should include vetShareCard.");
     },
   },
   {
@@ -277,6 +282,7 @@ const toolCases = [
         String(payload.riskPresentation?.riskBadge).includes("🚨"),
         "record_food_ingestion_event danger should include urgent visual badge.",
       );
+      assert(typeof payload.vetShareCard?.copyableText === "string", "record_food_ingestion_event should include vetShareCard.");
       assert(
         JSON.stringify(payload).includes("빠른 동물병원 상담 권장"),
         "record_food_ingestion_event should include fast vet consultation guidance for danger.",
@@ -536,6 +542,25 @@ function validateToolPayload(toolName, payload) {
     assert(
       typeof payload.riskPresentation.severityOrder === "number",
       `${toolName} riskPresentation.severityOrder is required.`,
+    );
+  }
+
+  if (payload.vetShareCard !== undefined) {
+    assert(
+      typeof payload.vetShareCard === "object" && payload.vetShareCard !== null,
+      `${toolName} vetShareCard must be object.`,
+    );
+    assert(
+      typeof payload.vetShareCard.copyableText === "string",
+      `${toolName} vetShareCard.copyableText is required.`,
+    );
+    assert(
+      payload.vetShareCard.copyableText.includes("병원 상담용 요약"),
+      `${toolName} vetShareCard.copyableText should be a vet consultation summary.`,
+    );
+    assert(
+      payload.vetShareCard.copyableText.includes("진단이나 처방이 아닙니다"),
+      `${toolName} vetShareCard should include safety note.`,
     );
   }
 }

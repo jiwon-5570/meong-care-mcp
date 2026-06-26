@@ -4,6 +4,7 @@ import {
   type DailyCareRecommendation,
   type VetVisitSummaryResult,
 } from "./careRules.js";
+import type { VetShareCard } from "./vetShareCardRules.js";
 import {
   analyzeDailyStatus,
   normalizeDailyStatusInput,
@@ -30,6 +31,7 @@ export interface DailyCareNoteResult {
   userFriendlyGuide: string;
   todayCare: DailyCareRecommendation;
   vetConsultPreparation: VetVisitSummaryResult;
+  vetShareCard: VetShareCard;
   nextAction: string;
 }
 
@@ -80,6 +82,7 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     ),
     todayCare,
     vetConsultPreparation,
+    vetShareCard: vetConsultPreparation.vetShareCard,
     nextAction: buildNextAction(analysis.riskPresentation, analysis.missingInfoQuestions),
   };
 }
@@ -114,6 +117,7 @@ function buildUserFriendlyGuide(
     `주요 내용: ${symptomText}`,
     currentAssessment,
     missingText,
+    "병원에 보여줄 내용은 vetShareCard.copyableText를 복사하면 됩니다.",
   ].join("\n");
 }
 

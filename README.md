@@ -27,6 +27,7 @@
 - 오늘 상태 분석
 - 입력 정보가 부족한 상태에서도 임시 위험도, 확인 질문, 보호자 안내 생성
 - 위험 상황을 `riskBadge`, `riskLabel`, `immediateAction`, `doNow`, `avoidActions`, `warningSignsToWatch`로 구조화해 보호자가 바로 알아볼 수 있게 표시
+- 병원 접수/상담 시 그대로 복사해 보여줄 수 있는 `vetShareCard.copyableText` 생성
 - 통합 일상 케어 노트 생성
 - 식단, 물 섭취, 산책, 휴식 관리 추천
 - 동물병원 상담용 증상 요약문 생성
@@ -86,6 +87,24 @@
 - ❔ 정보 확인 필요: 음식 성분이나 상황 정보가 부족해 위험도를 명확히 보기 어려운 경우
 
 이 안내는 진단이나 처방이 아니며, 이상 증상이 심하거나 지속되면 수의사 상담을 권장합니다.
+
+## 병원 공유용 요약 카드
+
+멍케어노트 MCP의 주요 상담 관련 응답은 `vetShareCard`를 포함합니다. `vetShareCard.copyableText`는 보호자가 카카오톡에서 그대로 복사해 동물병원 접수, 상담, 수의사에게 보여줄 수 있는 형식입니다.
+
+포함 정보:
+
+- 반려견 이름, 나이, 몸무게
+- 위험도와 바로 할 일
+- 주요 증상
+- 증상 시작 시점
+- 식욕, 변, 구토, 활동량
+- 먹은 음식/간식 또는 위험 음식 섭취 기록
+- 부족한 추가 확인 정보
+- 수의사에게 물어볼 질문
+- 진단/처방이 아니라는 안전 고지
+
+`vetShareCard`는 `create_vet_visit_summary`, `create_daily_care_note`, `record_food_ingestion_event`, `summarize_pet_chat_for_vet`, `record_pet_photo_observation` 응답에서 사용할 수 있습니다. 사진 관련 요약은 이미지 진단이 아니라 보호자 관찰 내용과 사진 기록을 정리한 보조 정보입니다.
 
 ## 입력이 부족한 상태에서도 안내
 
@@ -195,6 +214,7 @@
 - 오늘 식단/간식/물/산책/휴식 관리
 - 관찰할 증상
 - 병원 상담용 요약
+- 병원 공유용 요약 카드 `vetShareCard`
 - 다음 행동 안내
 - 안전 문구
 
@@ -249,6 +269,7 @@
 - 먹은 음식
 - 식욕/변/구토/활동량 상태
 - 수의사에게 물어볼 질문 목록. 부족한 정보 질문이 있으면 함께 포함
+- 병원 공유용 요약 카드 `vetShareCard`
 - 안전 문구
 
 ### `summarize_pet_chat_for_vet`
@@ -287,6 +308,7 @@
 - 위험도 표시 구조
 - 부족한 정보 질문
 - 병원 상담용 요약문
+- 병원 공유용 요약 카드 `vetShareCard`
 - 수의사에게 물어볼 질문
 - 개인정보 주의 문구
 - 안전 문구
@@ -336,6 +358,7 @@
 - 오늘 관리 행동
 - 병원 상담용 요약
 - 위험도 표시 구조
+- 병원 공유용 요약 카드 `vetShareCard`
 - 사진 기록 한계 안내
 - 안전 문구
 
@@ -365,6 +388,7 @@
 - 즉시 확인해야 할 항목
 - 위험도 표시 구조
 - 병원 상담용 요약문
+- 병원 공유용 요약 카드 `vetShareCard`
 - 안전 문구
 
 위험도가 `danger`이면 “빠른 동물병원 상담 권장”을 명확히 포함합니다.
@@ -389,7 +413,8 @@ meong-care-mcp/
 │  │  ├─ photoRules.ts
 │  │  ├─ riskPresentationRules.ts
 │  │  ├─ riskRules.ts
-│  │  └─ symptomRules.ts
+│  │  ├─ symptomRules.ts
+│  │  └─ vetShareCardRules.ts
 │  ├─ services/
 │  │  ├─ foodIngestionRecordService.ts
 │  │  ├─ jsonRecordStore.ts

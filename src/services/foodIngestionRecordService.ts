@@ -49,6 +49,7 @@ export async function recordFoodIngestionEvent(
     immediateGuide: analysis.immediateGuide,
     riskPresentation: analysis.riskPresentation,
     vetSummary: analysis.vetSummary,
+    vetShareCard: analysis.vetShareCard,
     safetyNotice: SAFETY_MESSAGE,
   };
 }

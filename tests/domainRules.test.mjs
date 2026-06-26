@@ -204,7 +204,10 @@ test("daily care note handles incomplete concern with friendly guide", () => {
   assert.ok(["watch", "vet_consult"].includes(note.riskLevel));
   assert.equal(typeof note.userFriendlyGuide, "string");
   assert.match(note.userFriendlyGuide, /🟡|🟠|🚨/);
+  assert.match(note.userFriendlyGuide, /vetShareCard\.copyableText/);
   assert.equal(typeof note.riskPresentation, "object");
+  assert.equal(typeof note.vetShareCard, "object");
+  assert.match(note.vetShareCard.copyableText, /병원 상담용 요약/);
   assert.ok(note.missingInfoQuestions.length >= 3);
   assert.ok(
     note.nextAction.includes(note.riskPresentation.immediateAction) ||
@@ -243,6 +246,9 @@ test("pet chat summary extracts symptoms and creates vet summary", () => {
   assert.ok(["watch", "vet_consult"].includes(summary.riskLevel));
   assert.equal(typeof summary.vetVisitSummary, "string");
   assert.match(summary.privacyNotice, /직접 조회하지/);
+  assertVetShareCardText(summary.vetShareCard);
+  assert.match(summary.vetShareCard.copyableText, /캡처|가족 대화/);
+  assert.match(summary.vetShareCard.copyableText, /식욕|변|구토/);
 });
 
 test("pet chat summary elevates dangerous food mention to urgent", () => {
@@ -256,6 +262,8 @@ test("pet chat summary elevates dangerous food mention to urgent", () => {
   assert.equal(summary.riskLevel, "urgent");
   assert.match(summary.riskPresentation.riskBadge, /🚨/);
   assert.match(`${summary.analyzedTextSummary} ${summary.vetVisitSummary}`, /빠른 상담|위험 음식/);
+  assert.match(summary.vetShareCard.copyableText, /병원 상담용 요약/);
+  assert.match(summary.vetShareCard.copyableText, /샤인머스캣/);
   assert.ok(summary.foodMentions.some((food) => food.includes("샤인머스캣")));
   assert.match(summary.riskReasons.join(" "), /위험 음식|빠른 동물병원 상담 권장/);
 });
@@ -293,6 +301,31 @@ test("vet summary keeps structured consultation fields", () => {
   assert.match(summary.vetVisitSummary, /반려견 정보/);
   assert.match(summary.vetVisitSummary, /어제부터/);
   assert.ok(summary.questionsForVet.length >= 3);
+  assertVetShareCardText(summary.vetShareCard);
+});
+
+test("vet summary creates copyable consultation share card", () => {
+  const summary = createVetVisitSummary({
+    dogName: "몽이",
+    ageYears: 6,
+    weightKg: 11,
+    symptoms: ["식욕 감소", "묽은 변"],
+    symptomStartedAt: "어제부터",
+    appetite: "감소",
+    stool: "묽은 변",
+    vomiting: "없음",
+    energy: "낮음",
+    foodOrSnackToday: ["사료"],
+    ownerConcern: "어제부터 밥을 덜 먹고 변이 묽습니다.",
+    riskLevel: "vet_consult",
+    missingInfoQuestions: ["물은 평소처럼 마셨나요?"],
+  });
+
+  assertVetShareCardText(summary.vetShareCard);
+  assert.match(summary.vetShareCard.copyableText, /몽이/);
+  assert.match(summary.vetShareCard.copyableText, /식욕 감소/);
+  assert.match(summary.vetShareCard.copyableText, /묽은 변/);
+  assert.ok(summary.vetShareCard.preparedQuestions.length >= 3);
 });
 
 test("symptom classifier extracts built-in demo symptoms without external data", () => {
@@ -307,16 +340,15 @@ test("symptom classifier extracts built-in demo symptoms without external data",
 });
 
 test("photo observation rules classify stool and skin observations", () => {
-  assert.equal(
-    analyzePhotoObservation({
+  const stoolPhoto = analyzePhotoObservation({
       photoType: "stool",
       visualNotes: "묽은 변처럼 보임",
       appetite: "less",
       vomiting: "none",
       energy: "normal",
-    }).riskLevel,
-    "watch",
-  );
+    });
+  assert.equal(stoolPhoto.riskLevel, "watch");
+  assertVetShareCardText(stoolPhoto.vetShareCard);
 
   assert.equal(
     analyzePhotoObservation({
@@ -373,7 +405,23 @@ test("food ingestion event produces missing questions and danger summary", () =>
   assert.equal(analysis.riskLevel, "danger");
   assert.match(analysis.vetSummary, /빠른 동물병원 상담 권장/);
   assert.ok(analysis.immediateGuide.some((guide) => guide.includes("임의로 약")));
+  assertVetShareCardText(analysis.vetShareCard);
+  assert.match(analysis.vetShareCard.copyableText, /샤인머스캣/);
+  assert.match(analysis.vetShareCard.copyableText, /한 알/);
+  assert.match(analysis.vetShareCard.copyableText, /30분 전/);
+  assert.match(analysis.vetShareCard.copyableText, /빠른|동물병원/);
 });
+
+function assertVetShareCardText(vetShareCard) {
+  assert.equal(typeof vetShareCard, "object");
+  assert.equal(typeof vetShareCard.copyableText, "string");
+  assert.match(vetShareCard.copyableText, /멍케어노트 병원 상담용 요약/);
+  assert.match(vetShareCard.copyableText, /진단이나 처방이 아닙니다/);
+  assert.doesNotMatch(
+    vetShareCard.copyableText,
+    /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|정상 괜찮습니다|완치/,
+  );
+}
 
 test("safety message is attached consistently", () => {
   assert.match(SAFETY_MESSAGE, /진단이나 처방이 아니며/);

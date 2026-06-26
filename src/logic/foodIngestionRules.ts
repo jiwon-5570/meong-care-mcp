@@ -1,5 +1,6 @@
 import { checkFoodSafety, type FoodRiskLevel } from "./foodRules.js";
 import type { RiskPresentation } from "./riskPresentationRules.js";
+import { buildVetShareCard, type VetShareCard } from "./vetShareCardRules.js";
 import type {
   FoodIngestionEventInput,
   FoodIngestionRecordedSummary,
@@ -12,6 +13,7 @@ export interface FoodIngestionAnalysis {
   immediateGuide: string[];
   riskPresentation: RiskPresentation;
   vetSummary: string;
+  vetShareCard: VetShareCard;
 }
 
 export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodIngestionAnalysis {
@@ -22,18 +24,35 @@ export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodI
     amount: input.amount,
     dogWeightKg: input.weightKg,
   });
+  const missingInfoQuestions = buildMissingInfoQuestions(input);
+  const immediateGuide = buildImmediateGuide(
+    foodSafety.riskLevel,
+    recordedSummary,
+    foodSafety.riskPresentation,
+  );
+  const vetShareCard = buildVetShareCard({
+    source: "food_ingestion",
+    dogName: recordedSummary.dogName,
+    weightKg: recordedSummary.weightKg,
+    riskLevel: foodSafety.riskLevel,
+    riskPresentation: foodSafety.riskPresentation,
+    eatenFood: buildFoodLabel(recordedSummary.foodName, recordedSummary.foodDetail),
+    eatenAmount: recordedSummary.amount,
+    eatenAt: recordedSummary.eatenAt,
+    currentSymptoms: recordedSummary.currentSymptoms,
+    ownerConcern: recordedSummary.ownerMemo,
+    missingInfoQuestions,
+    questionsForVet: buildFoodIngestionQuestionsForVet(foodSafety.riskLevel),
+  });
 
   return {
     riskLevel: foodSafety.riskLevel,
     recordedSummary,
-    missingInfoQuestions: buildMissingInfoQuestions(input),
-    immediateGuide: buildImmediateGuide(
-      foodSafety.riskLevel,
-      recordedSummary,
-      foodSafety.riskPresentation,
-    ),
+    missingInfoQuestions,
+    immediateGuide,
     riskPresentation: foodSafety.riskPresentation,
     vetSummary: buildVetSummary(recordedSummary, foodSafety.riskLevel),
+    vetShareCard,
   };
 }
 
@@ -176,6 +195,20 @@ function buildVetRiskGuide(riskLevel: FoodRiskLevel): string {
   }
 
   return "안전성을 확정하기 어려워 성분 확인과 이상 증상 관찰 후 동물병원 상담 필요 여부 확인 권장.";
+}
+
+function buildFoodIngestionQuestionsForVet(riskLevel: FoodRiskLevel): string[] {
+  const questions = [
+    "현재 섭취한 음식이 위험 음식에 해당할 수 있는지 확인하고 싶습니다.",
+    "현재 증상이 없어도 어떤 변화를 관찰해야 하는지 알고 싶습니다.",
+    "먹은 양과 시간이 현재 상담 판단에 얼마나 중요한지 확인하고 싶습니다.",
+  ];
+
+  if (riskLevel === "danger") {
+    questions.unshift("위험 음식 섭취 가능성이 있을 때 지금 바로 내원이 필요한지 확인하고 싶습니다.");
+  }
+
+  return questions;
 }
 
 function buildSymptomGuide(symptoms: string[]): string {

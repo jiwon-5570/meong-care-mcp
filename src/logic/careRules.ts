@@ -1,5 +1,6 @@
 import type { DailyRiskLevel } from "./riskRules.js";
 import { buildDailyRiskPresentation, type RiskPresentation } from "./riskPresentationRules.js";
+import { buildVetShareCard, type VetShareCard } from "./vetShareCardRules.js";
 
 export interface DailyCareInput {
   dogName: string;
@@ -50,6 +51,7 @@ export interface VetVisitSummaryResult {
   };
   questionsForVet: string[];
   riskPresentation?: RiskPresentation;
+  vetShareCard: VetShareCard;
 }
 
 export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendation {
@@ -180,6 +182,31 @@ export function createVetVisitSummary(input: VetVisitSummaryInput): VetVisitSumm
   const riskPresentation = input.riskLevel !== undefined
     ? buildDailyRiskPresentation(input.riskLevel, [], symptoms)
     : undefined;
+  const questionsForVet = uniqueStrings([
+    "현재 증상에서 우선 확인해야 할 위험 신호가 무엇인지 상담하고 싶습니다.",
+    "오늘 식단, 물 섭취, 산책은 어떻게 조절하면 좋을까요?",
+    "어떤 변화가 보이면 바로 다시 연락하거나 방문해야 하나요?",
+    "오늘 먹은 음식이나 간식이 현재 상태와 관련될 수 있는지 궁금합니다.",
+    ...missingInfoQuestions.map((question) => `추가 확인 필요: ${question}`),
+  ]);
+  const vetShareCard = buildVetShareCard({
+    source: "vet_visit_summary",
+    dogName: input.dogName,
+    ageYears: input.ageYears,
+    weightKg: input.weightKg,
+    riskLevel: input.riskLevel,
+    riskPresentation,
+    symptoms,
+    symptomStartedAt: startedAt,
+    appetite: status.appetite,
+    stool: status.stool,
+    vomiting: status.vomiting,
+    energy: status.energy,
+    foodOrSnackToday,
+    ownerConcern: input.ownerConcern,
+    missingInfoQuestions,
+    questionsForVet,
+  });
 
   return {
     vetVisitSummary: summaryParts.join("\n"),
@@ -187,14 +214,9 @@ export function createVetVisitSummary(input: VetVisitSummaryInput): VetVisitSumm
     symptomStartedAt: startedAt,
     foodOrSnackToday,
     status,
-    questionsForVet: uniqueStrings([
-      "현재 증상에서 우선 확인해야 할 위험 신호가 무엇인지 상담하고 싶습니다.",
-      "오늘 식단, 물 섭취, 산책은 어떻게 조절하면 좋을까요?",
-      "어떤 변화가 보이면 바로 다시 연락하거나 방문해야 하나요?",
-      "오늘 먹은 음식이나 간식이 현재 상태와 관련될 수 있는지 궁금합니다.",
-      ...missingInfoQuestions.map((question) => `추가 확인 필요: ${question}`),
-    ]),
+    questionsForVet,
     ...(riskPresentation !== undefined ? { riskPresentation } : {}),
+    vetShareCard,
   };
 }
 

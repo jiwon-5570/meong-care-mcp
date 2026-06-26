@@ -1,5 +1,6 @@
 import type { DailyRiskLevel } from "../logic/riskRules.js";
 import type { RiskPresentation } from "../logic/riskPresentationRules.js";
+import type { VetShareCard } from "../logic/vetShareCardRules.js";
 
 export type PhotoType = "stool" | "skin";
 export type AppetiteForPhoto = "normal" | "less" | "none" | "unknown";
@@ -26,6 +27,7 @@ export interface PhotoObservationAnalysis {
   todayCareActions: string[];
   vetSummary: string;
   riskPresentation: RiskPresentation;
+  vetShareCard: VetShareCard;
   photoLimitations: string;
   hospitalSearchGuide?: string;
 }
