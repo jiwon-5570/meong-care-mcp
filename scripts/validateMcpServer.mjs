@@ -18,7 +18,7 @@ const BANNED_PHRASES = [
   "병원 안 가도 됩니다",
 ];
 const EXPECTED_SAFETY_MESSAGE_PART = "진단이나 처방이 아니며";
-const MOJIBAKE_HINTS = ["�", "硫", "怨듦났", "蹂댄샇", "援ы", "誘몄", "諛섎"];
+const MOJIBAKE_HINTS = ["占", "筌", "癰", "�", "硫", "蹂", "諛", "湲"];
 
 const photoRecordsPath = path.join(tmpdir(), `meong-photo-records-${Date.now()}.json`);
 const foodRecordsPath = path.join(tmpdir(), `meong-food-records-${Date.now()}.json`);
@@ -95,6 +95,25 @@ const toolCases = [
     },
   },
   {
+    name: "create_daily_care_note",
+    args: {
+      dogName: "몽이",
+      ageYears: 6,
+      weightKg: 11,
+      appetite: "less",
+      stool: "soft",
+      vomiting: "none",
+      energy: "normal",
+      symptomStartedAt: "어제부터",
+      ownerConcern: "밥을 반만 먹고 변이 묽어요.",
+    },
+    assert: (payload) => {
+      assert(payload.riskLevel === "vet_consult", "create_daily_care_note should classify persistent symptoms as vet_consult.");
+      assert(typeof payload.nextAction === "string", "create_daily_care_note should include nextAction.");
+      assert(typeof payload.vetConsultPreparation?.vetVisitSummary === "string", "create_daily_care_note should include vet summary.");
+    },
+  },
+  {
     name: "recommend_daily_care",
     args: {
       dogName: "몽이",
@@ -139,7 +158,7 @@ const toolCases = [
   {
     name: "classify_pet_symptom",
     args: {
-      text: "밥을 안 먹고 축 처져 있어요.",
+      text: "밥을 안 먹고 축 처져 있어요",
       animalType: "dog",
     },
     assert: (payload) => {
@@ -388,7 +407,7 @@ function validateToolMetadata(tools) {
     assert(typeof tool.description === "string" && tool.description.length > 0, `${tool.name} description is required.`);
     assert(tool.description.length <= 1024, `${tool.name} description exceeds 1024 characters.`);
     assert(
-      tool.description.includes("MeongCareNote MCP("),
+      tool.description.includes("MeongCareNote MCP(멍케어노트 MCP)"),
       `${tool.name} description must include MeongCareNote MCP(멍케어노트 MCP).`,
     );
     assert(tool.inputSchema !== undefined, `${tool.name} inputSchema is required.`);

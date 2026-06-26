@@ -11,14 +11,14 @@ interface SignRule {
 }
 
 const STOOL_SIGN_RULES: SignRule[] = [
-  { sign: "normal_like", keywords: ["정상", "단단", "모양이 잡", "갈색"] },
-  { sign: "soft", keywords: ["무른", "묽은", "질퍽", "말랑"] },
+  { sign: "normal_like", keywords: ["정상", "단단", "모양있", "갈색"] },
+  { sign: "soft", keywords: ["무른", "묽은", "질척", "말랑"] },
   { sign: "diarrhea_like", keywords: ["설사", "물변", "흐름", "물처럼"] },
   { sign: "blood_like", keywords: ["피", "혈", "빨간", "붉은", "선홍"] },
   { sign: "black_tarry_like", keywords: ["검은", "타르", "까맣", "흑색"] },
   { sign: "mucus_like", keywords: ["점액", "끈적", "젤리"] },
   { sign: "foreign_object_like", keywords: ["이물", "플라스틱", "장난감", "천", "뼈"] },
-  { sign: "poor_quality", keywords: ["흐림", "어두운", "잘 안 보", "초점"] },
+  { sign: "poor_quality", keywords: ["흐림", "어두움", "잘 안 보", "초점"] },
 ];
 
 const SKIN_SIGN_RULES: SignRule[] = [
@@ -30,7 +30,7 @@ const SKIN_SIGN_RULES: SignRule[] = [
   { sign: "discharge", keywords: ["진물", "고름", "분비물"] },
   { sign: "swelling", keywords: ["부음", "부어", "붓기"] },
   { sign: "lump", keywords: ["혹", "덩어리", "몽우리"] },
-  { sign: "poor_quality", keywords: ["흐림", "어두운", "잘 안 보", "초점"] },
+  { sign: "poor_quality", keywords: ["흐림", "어두움", "잘 안 보", "초점"] },
 ];
 
 export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObservationAnalysis {
@@ -161,7 +161,7 @@ function buildCareActions(
 
   const actions = [
     "해당 부위를 계속 핥거나 긁는지 관찰해 주세요.",
-    "사람 연고, 소독제, 임의 제품 사용은 피해주세요.",
+    "사람 연고, 소독약, 임의 제품 사용은 피해주세요.",
     "향이 강한 제품이나 새 목욕 제품은 잠시 줄이는 편이 좋습니다.",
   ];
 

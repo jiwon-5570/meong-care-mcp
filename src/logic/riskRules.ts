@@ -51,14 +51,14 @@ export function analyzeDailyStatus(input: DailyStatusInput): DailyStatusAnalysis
   const contextualReasons = collectContextualConcernReasons(input, abnormalReasons.length);
   const consultReasons = [...abnormalReasons, ...contextualReasons];
 
-  if (abnormalReasons.length >= 2 || contextualReasons.length > 0) {
+  if (countConsultSignals(input) >= 2 || abnormalReasons.length >= 2 || contextualReasons.length > 0) {
     return {
       dogName: input.dogName,
       riskLevel: "vet_consult",
       reasons: [
-        abnormalReasons.length >= 2
-          ? "관찰이 필요한 이상 신호가 2개 이상 함께 입력되었습니다."
-          : "증상 기간이나 반려견 조건상 동물병원 상담 권장 단계로 분류했습니다.",
+        countConsultSignals(input) >= 2 || abnormalReasons.length >= 2
+          ? "동물병원 상담을 권장할 수 있는 이상 신호가 2개 이상 함께 입력되었습니다."
+          : "증상 기간이나 반려견 조건상 동물병원 상담을 고려하는 것이 좋습니다.",
         ...consultReasons,
       ],
       mainSymptoms: consultReasons,
@@ -159,6 +159,20 @@ function collectNonUrgentAbnormalReasons(input: DailyStatusInput): string[] {
   return reasons;
 }
 
+function countConsultSignals(input: DailyStatusInput): number {
+  let count = 0;
+
+  if (input.stool === "diarrhea") count += 1;
+  if (input.vomiting === "once") count += 1;
+  if (input.appetite === "less") count += 1;
+  if (input.energy === "low") count += 1;
+  if (input.coughing === true) count += 1;
+  if (input.itching === true) count += 1;
+  if (input.eyeDischarge === true) count += 1;
+
+  return count;
+}
+
 function collectContextualConcernReasons(
   input: DailyStatusInput,
   abnormalReasonCount: number,
@@ -178,7 +192,7 @@ function collectContextualConcernReasons(
   }
 
   if (input.vomiting === "once" && (input.stool === "diarrhea" || input.energy === "low")) {
-    reasons.push("구토가 다른 이상 신호와 함께 입력되어 관찰 강도를 높였습니다.");
+    reasons.push("구토가 다른 이상 신호와 함께 입력되어 관찰 강도를 높입니다.");
   }
 
   return reasons;
@@ -201,7 +215,7 @@ function hasDurationConcern(symptomStartedAt: string | undefined): boolean {
     "며칠",
     "계속",
     "지속",
-    "밤부터",
+    "밤새",
   ];
 
   return durationKeywords.some((keyword) => normalized.includes(keyword));

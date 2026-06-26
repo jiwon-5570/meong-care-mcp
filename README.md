@@ -1,56 +1,73 @@
 # 멍케어노트 MCP
 
-멍케어노트 MCP는 PlayMCP 또는 카카오톡 Agent에서 사용할 수 있는 반려견 일상 케어·식단·증상 기록 보조 MCP(Model Context Protocol) 서버입니다.
+멍케어노트 MCP는 PlayMCP 또는 카카오톡 Agent에서 바로 사용할 수 있는 반려견 일상 케어 보조 MCP(Model Context Protocol) 서버입니다.
 
-보호자가 입력한 음식 섭취, 식욕, 변 상태, 구토, 활동량, 자연어 증상 표현, 사진 관찰 내용을 구조화해 위험 신호를 분류하고 오늘의 관리 행동과 동물병원 상담용 요약을 제공합니다.
+보호자가 반려견의 나이, 몸무게, 식욕, 변 상태, 구토 여부, 활동량, 먹은 음식 등을 입력하면 현재 상태를 바탕으로 위험 신호를 분류하고 오늘의 식단, 산책, 휴식, 관찰 행동을 안내합니다. 또한 위험 음식 섭취나 이상 증상이 있을 때 동물병원 상담용 요약문을 생성합니다.
 
-이 서비스는 질병을 진단하거나 약을 처방하지 않습니다. 모든 응답은 보호자의 기록과 상담 준비를 돕는 보조 안내이며, 이상 증상이 심하거나 지속되면 수의사 상담을 권장합니다.
+이 서비스는 질병을 진단하거나 약을 처방하지 않습니다. 보호자가 이상 신호를 놓치지 않도록 돕고, 수의사에게 더 정확한 정보를 전달할 수 있게 정리하는 생활 관리 보조 도구입니다.
 
-## 현재 구현 상태
+## 현재 상태
 
 - Node.js + TypeScript strict mode
-- Express 기반 HTTP 서버
-- MCP Streamable HTTP endpoint
-- MCP tools 8개 구현
-- `GET /health` 구현
-- `POST /mcp` 구현
-- `.env` / `.env.example` 환경 변수 구성
-- 공공데이터 API 실패 시 fallback 구조
-- `npm run build` 통과
-- production entrypoint `dist/index.js` 실행 확인
+- Express 기반 Streamable HTTP MCP 서버
+- `GET /health`
+- `POST /mcp`
+- MCP tools 9개 구현
+- Dockerfile 포함
+- KakaoCloud Git 소스 빌드 대응
+- 공공데이터 API 실패 시 로컬 샘플 fallback
+- Anthropic API 설정 시 사진 관찰 보조 지원
+- JSON 파일 기반 MVP 기록 저장
+- `npm test`, `npm run validate` 통과
 
 ## 주요 기능
 
-- 반려견이 먹은 음식의 위험도 확인
-- 식욕, 변, 구토, 활동량 기반 일상 상태 위험도 분류
-- 위험도와 주요 증상에 맞춘 오늘의 관리 행동 추천
+- 음식 안전 확인
+- 위험 음식 섭취 기록 및 병원 상담용 요약 생성
+- 오늘 상태 분석
+- 통합 일상 케어 노트 생성
+- 식단, 물 섭취, 산책, 휴식 관리 추천
 - 동물병원 상담용 증상 요약문 생성
-- 지역명 기반 동물병원 후보 안내
-- 보호자 자연어 증상 표현을 표준 증상명과 카테고리로 정리
-- 변/피부 사진 기록과 보호자 관찰 기반 이상 징후 정리
-- 위험 음식 섭취 상황을 병원 상담용으로 구조화해 기록
-- 모든 MCP tool 응답에 의료 안전 문구 포함
+- 지역 기반 동물병원 후보 안내
+- 자연어 증상 표현 분류
+- 변/피부 사진 관찰 기록
+
+## 의료 안전 원칙
+
+- 병명을 단정하지 않습니다.
+- 약을 처방하지 않습니다.
+- “이 병입니다”, “이 약을 먹이세요”, “병원 안 가도 됩니다” 같은 표현을 사용하지 않습니다.
+- 위험한 경우 “빠른 동물병원 상담 권장”, “동물병원 상담 권장”처럼 명확히 안내합니다.
+- 사진 기능은 이미지 진단이 아니라 사진 기록 및 관찰 보조 기능입니다.
+- 모든 MCP tool 응답에는 안전 문구가 포함됩니다.
+
+공통 안전 문구는 `src/utils/safetyMessage.ts`에서 관리합니다.
 
 ## MCP Tool 목록
 
 | Tool | 역할 |
 | --- | --- |
-| `check_food_safety` | 반려견이 먹은 음식의 위험도를 `safe`, `caution`, `danger`, `unknown`으로 분류하고 보호자 행동을 안내합니다. |
-| `analyze_daily_status` | 식욕, 변, 구토, 활동량 등 오늘 상태를 기반으로 `normal`, `watch`, `vet_consult`, `urgent`를 분류합니다. |
-| `recommend_daily_care` | 위험도와 주요 증상에 따라 식단, 간식, 물 섭취, 산책, 휴식 관리 행동을 추천합니다. |
+| `check_food_safety` | 음식명을 기준으로 `safe`, `caution`, `danger`, `unknown` 위험도를 분류하고 보호자 행동을 안내합니다. |
+| `analyze_daily_status` | 식욕, 변, 구토, 활동량, 증상 기간, 위험 음식 섭취 여부를 바탕으로 오늘 상태 위험도를 분류합니다. |
+| `create_daily_care_note` | 오늘 상태 입력 한 번으로 위험도, 식단, 산책, 휴식, 관찰 항목, 병원 상담용 요약을 함께 생성합니다. |
+| `recommend_daily_care` | 위험도와 주요 증상을 바탕으로 오늘의 식단, 물 섭취, 산책, 휴식 관리 행동을 추천합니다. |
 | `create_vet_visit_summary` | 동물병원 상담 시 보여줄 수 있는 증상 요약문과 질문 목록을 생성합니다. |
 | `find_nearby_animal_hospitals` | 지역명 기반으로 동물병원 후보를 안내합니다. 공공데이터 API 또는 로컬 샘플 데이터를 사용합니다. |
-| `classify_pet_symptom` | 보호자 자연어 증상 표현을 표준 증상명, 카테고리, `normalizedSymptoms`로 정리합니다. |
-| `record_pet_photo_observation` | 변/피부 사진 기록과 보호자 관찰 내용을 바탕으로 이상 징후를 정리합니다. |
-| `record_food_ingestion_event` | 위험할 수 있는 음식 섭취 상황을 구조화해 기록하고 동물병원 상담용 요약을 생성합니다. |
+| `classify_pet_symptom` | 보호자의 자연어 증상 표현을 증상명, 카테고리, 정규화된 표현으로 정리합니다. |
+| `record_pet_photo_observation` | 변/피부 사진과 보호자 관찰 내용을 기록하고 이상 징후를 정리합니다. |
+| `record_food_ingestion_event` | 위험할 수 있는 음식 섭취 상황을 구조화해 기록하고 병원 상담용 요약을 생성합니다. |
+
+모든 tool은 PlayMCP 권장 metadata 규칙에 맞춰 `name`, `description`, `inputSchema`, `annotations`를 포함합니다.
 
 ## Tool 상세
 
 ### `check_food_safety`
 
+반려견이 먹은 음식의 위험도를 확인하고 보호자가 취해야 할 행동을 안내합니다.
+
 입력:
 
-- `foodName`: string
+- `foodName: string`
 - `amount?: string`
 - `dogWeightKg?: number`
 
@@ -59,42 +76,76 @@
 - 음식명
 - 섭취량
 - 몸무게
-- 위험도
+- 위험도: `safe` | `caution` | `danger` | `unknown`
 - 보호자 행동 안내
 - 안전 문구
 
+위험 음식 예시:
+
+- 초콜릿
+- 포도
+- 건포도
+- 양파
+- 마늘
+- 자일리톨
+- 커피/카페인
+- 알코올
+- 마카다미아
+- 아보카도
+
 ### `analyze_daily_status`
+
+반려견의 오늘 상태를 바탕으로 위험도를 분류합니다.
 
 입력:
 
-- `dogName`: string
+- `dogName: string`
 - `ageYears?: number`
 - `weightKg?: number`
-- `appetite`: `normal` | `less` | `none` | `increased`
-- `stool`: `normal` | `soft` | `diarrhea` | `bloody` | `unknown`
-- `vomiting`: `none` | `once` | `multiple`
-- `energy`: `normal` | `low` | `very_low`
+- `appetite: "normal" | "less" | "none" | "increased"`
+- `stool: "normal" | "soft" | "diarrhea" | "bloody" | "unknown"`
+- `vomiting: "none" | "once" | "multiple"`
+- `energy: "normal" | "low" | "very_low"`
 - `coughing?: boolean`
 - `itching?: boolean`
 - `eyeDischarge?: boolean`
 - `foodOrSnackToday?: string[]`
 - `symptomStartedAt?: string`
 
+위험도:
+
+- `urgent`: 혈변, 반복 구토, 매우 무기력, 식욕 전혀 없음, 위험 음식 섭취
+- `vet_consult`: 이상 신호 2개 이상, 증상 지속, 어린 강아지/노령견의 이상 신호
+- `watch`: 이상 신호 1개 또는 묽은 변
+- `normal`: 뚜렷한 이상 입력 없음
+
+### `create_daily_care_note`
+
+카카오톡에서 가장 자연스럽게 쓰기 위한 통합 tool입니다. 보호자가 오늘 상태를 한 번에 말하면 위험도 분석, 오늘 관리 행동, 병원 상담용 요약을 함께 생성합니다.
+
+입력은 `analyze_daily_status`와 동일하며 `ownerConcern?: string`을 추가로 받을 수 있습니다.
+
 출력:
 
 - 반려견 이름
 - 위험도
-- 판단 이유 목록
-- 오늘의 관리 권장사항
+- 판단 이유
+- 주요 증상
+- 오늘 식단/간식/물/산책/휴식 관리
+- 관찰할 증상
+- 병원 상담용 요약
+- 다음 행동 안내
 - 안전 문구
 
 ### `recommend_daily_care`
 
+위험도와 주요 증상을 바탕으로 오늘의 관리 행동을 추천합니다.
+
 입력:
 
-- `dogName`: string
-- `riskLevel`: `normal` | `watch` | `vet_consult` | `urgent`
-- `mainSymptoms`: string[]
+- `dogName: string`
+- `riskLevel: "normal" | "watch" | "vet_consult" | "urgent"`
+- `mainSymptoms: string[]`
 - `weightKg?: number`
 - `ageYears?: number`
 
@@ -110,12 +161,14 @@
 
 ### `create_vet_visit_summary`
 
+동물병원 상담 시 보여줄 수 있는 증상 요약문을 생성합니다.
+
 입력:
 
-- `dogName`: string
+- `dogName: string`
 - `ageYears?: number`
 - `weightKg?: number`
-- `symptoms`: string[]
+- `symptoms: string[]`
 - `symptomStartedAt?: string`
 - `appetite?: string`
 - `stool?: string`
@@ -132,57 +185,50 @@
 - 먹은 음식
 - 식욕/변/구토/활동량 상태
 - 수의사에게 물어볼 질문 목록
+- 안전 문구
 
 ### `find_nearby_animal_hospitals`
 
+지역명 기반으로 동물병원 후보를 안내합니다.
+
 입력:
 
-- `region`: string
+- `region: string`
 - `maxResults?: number`
 - `onlyOpen?: boolean`
 
-설명:
-
-1차 MVP에서는 GPS 기반 거리 계산이 아니라 지역명 문자열 검색을 사용합니다. `PUBLIC_DATA_SERVICE_KEY`와 `USE_PUBLIC_DATA_API=true`가 설정되어 있으면 공공데이터 API 호출을 시도하고, 실패하면 로컬 샘플 데이터로 fallback합니다.
+공공데이터 API 키와 URL이 설정되어 있으면 실시간 호출을 시도합니다. 호출 실패 또는 미설정 시 `src/data/animalHospitals.sample.json`을 사용합니다.
 
 ### `classify_pet_symptom`
 
-입력:
+보호자가 자연스럽게 입력한 증상 표현을 증상명과 카테고리로 정리합니다.
 
-- `text`: string
-- `animalType?: "dog" | "cat" | "unknown"`
+예:
 
-설명:
-
-질병명을 예측하지 않고 보호자의 자연어 표현을 증상 단위로 정리합니다. 예를 들어 “밥을 안 먹고 축 처져 있어”는 식욕저하, 무기력 같은 증상 표현으로 정리됩니다.
+- “밥을 안 먹고 축 처져 있어요”
+- “변이 묽고 구토했어요”
+- “계속 긁고 눈곱이 많아요”
 
 ### `record_pet_photo_observation`
 
-입력:
+변/피부 사진과 보호자 관찰 내용을 기록하고 이상 징후를 정리합니다.
 
-- `dogName?: string`
-- `photoType`: `stool` | `skin`
-- `imageUrl?: string`
-- `imageBase64?: string`
-- `takenAt?: string`
-- `visualNotes?: string`
-- `observedSigns?: string[]`
-- `relatedSymptoms?: string[]`
-- `appetite?: "normal" | "less" | "none" | "unknown"`
-- `vomiting?: "none" | "once" | "multiple" | "unknown"`
-- `energy?: "normal" | "low" | "very_low" | "unknown"`
+중요:
 
-주의:
-
-사진 기능은 실제 이미지 진단 기능이 아닙니다. 현재 MVP는 보호자가 입력한 사진 설명, 관찰 항목, 관련 증상을 바탕으로 이상 징후를 기록하는 보조 기능입니다. `imageBase64`는 전체 원문을 저장하지 않고 preview/omitted 형태로 처리합니다.
+- 실제 이미지 진단이 아닙니다.
+- 사진에 보이는 객관적 특징과 보호자 입력을 기록하는 보조 기능입니다.
+- `imageBase64`는 전체 저장하지 않고 preview 또는 `[base64 omitted]`로만 저장합니다.
+- `ANTHROPIC_API_KEY`가 있으면 Anthropic API로 사진 관찰 보조를 시도하고 실패 시 룰 기반 fallback을 사용합니다.
 
 ### `record_food_ingestion_event`
+
+위험할 수 있는 음식을 먹은 상황을 병원 상담용으로 구조화해 기록합니다.
 
 입력:
 
 - `dogName?: string`
 - `weightKg?: number`
-- `foodName`: string
+- `foodName: string`
 - `foodDetail?: string`
 - `amount?: string`
 - `eatenAt?: string`
@@ -194,32 +240,28 @@
 출력:
 
 - `recordId`
-- 위험도: `safe` | `caution` | `danger` | `unknown`
+- 위험도
 - 기록된 정보 요약
 - 부족한 정보 질문 목록
 - 즉시 확인해야 할 항목
 - 병원 상담용 요약문
 - 안전 문구
 
-설명:
-
-`record_food_ingestion_event`는 반려견이 위험할 수 있는 음식을 먹었을 때 음식 종류, 상세 음식명, 섭취량, 섭취 시간, 몸무게, 현재 증상, 사진 정보를 기록하고 동물병원 상담용 요약을 생성하는 tool입니다. 이 기능은 진단이나 처방이 아니라 보호자가 수의사에게 정확한 정보를 전달할 수 있도록 돕는 기록 보조 기능입니다.
-
-위험도가 `danger`이면 응답에 “빠른 동물병원 상담 권장” 안내를 명확히 포함합니다. `imageBase64`는 전체 원문을 저장하지 않고 preview/omitted 형태로 처리합니다.
+위험도가 `danger`이면 “빠른 동물병원 상담 권장”을 명확히 포함합니다.
 
 ## 프로젝트 구조
 
 ```text
 meong-care-mcp/
 ├─ src/
-│  ├─ index.ts
 │  ├─ data/
 │  │  ├─ animalHospitals.sample.json
 │  │  ├─ foodIngestionRecords.json
-│  │  ├─ symptomDictionary.sample.json
-│  │  └─ photoRecords.json
+│  │  ├─ photoRecords.json
+│  │  └─ symptomDictionary.sample.json
 │  ├─ logic/
 │  │  ├─ careRules.ts
+│  │  ├─ dailyCareNoteRules.ts
 │  │  ├─ foodIngestionRules.ts
 │  │  ├─ foodRules.ts
 │  │  ├─ hospitalRules.ts
@@ -228,6 +270,7 @@ meong-care-mcp/
 │  │  └─ symptomRules.ts
 │  ├─ services/
 │  │  ├─ foodIngestionRecordService.ts
+│  │  ├─ jsonRecordStore.ts
 │  │  ├─ photoRecordService.ts
 │  │  ├─ publicDataHospitalService.ts
 │  │  ├─ publicDataSymptomService.ts
@@ -235,14 +278,20 @@ meong-care-mcp/
 │  ├─ types/
 │  │  ├─ foodIngestionRecord.ts
 │  │  └─ photoRecord.ts
-│  └─ utils/
-│     └─ safetyMessage.ts
+│  ├─ utils/
+│  │  └─ safetyMessage.ts
+│  └─ index.ts
+├─ scripts/
+│  └─ validateMcpServer.mjs
+├─ tests/
+│  ├─ domainRules.test.mjs
+│  └─ jsonRecordStore.test.mjs
+├─ Dockerfile
+├─ README.md
 ├─ demo-prompts.md
 ├─ submission-summary.md
 ├─ package.json
-├─ tsconfig.json
-├─ README.md
-└─ .env.example
+└─ tsconfig.json
 ```
 
 ## 설치
@@ -257,21 +306,33 @@ npm install
 npm run dev
 ```
 
+기본 포트는 `3000`입니다.
+
+```text
+http://localhost:3000
+```
+
 ## 빌드
 
 ```bash
 npm run build
 ```
 
-## 자동 검증
+빌드 결과는 `dist/`에 생성됩니다.
 
-도메인 룰과 기록 저장소 회귀 테스트만 빠르게 확인할 때는 아래 명령을 실행합니다.
+## 실행
+
+```bash
+npm start
+```
+
+## 테스트
 
 ```bash
 npm test
 ```
 
-배포 또는 PlayMCP 등록 전에는 아래 명령으로 회귀 테스트와 MCP tool 품질 검사를 함께 실행합니다.
+## MCP 검증
 
 ```bash
 npm run validate
@@ -279,52 +340,16 @@ npm run validate
 
 검증 항목:
 
-- TypeScript strict build 통과
-- 음식 위험도, 일상 상태 위험도, 케어 추천, 증상 분류, 사진 관찰, 병원 검색 룰 회귀 테스트 통과
-- JSON 기록 저장소의 파일 생성, 동시 기록, 손상 파일 복구 테스트 통과
-- `/health` 응답 확인
-- Streamable HTTP MCP 초기화 확인
-- `tools/list`에서 8개 tool 노출 확인
-- tool 이름 규칙, 중복, 개수 제한 확인
-- `description`, `inputSchema`, `annotations` 필수값 확인
-- 모든 대표 tool 호출 응답의 안전 문구 포함 확인
-- 진단/처방으로 오해될 수 있는 금지 표현 포함 여부 확인
-- 사진 기록과 위험 음식 섭취 기록이 임시 파일에 정상 저장되는지 확인
-
-## Production 실행
-
-```bash
-npm run build
-npm start
-```
-
-`npm start`는 `dist/index.js`를 실행합니다. 서버 포트는 `PORT` 환경 변수를 사용합니다. `PORT`가 없거나 잘못된 값이면 기본값 `3000`으로 실행됩니다.
-
-## Docker 실행
-
-카카오클라우드 Git 소스 빌드를 위해 루트에 `Dockerfile`을 제공합니다.
-
-로컬 이미지 빌드:
-
-```bash
-docker build -t meong-care-mcp .
-```
-
-로컬 컨테이너 실행:
-
-```bash
-docker run --rm -p 3000:3000 \
-  -e PORT=3000 \
-  -e USE_PUBLIC_DATA_API=false \
-  -e USE_SYMPTOM_PUBLIC_DATA=false \
-  meong-care-mcp
-```
-
-Windows PowerShell에서는 줄바꿈 없이 실행해도 됩니다.
-
-```powershell
-docker run --rm -p 3000:3000 -e PORT=3000 -e USE_PUBLIC_DATA_API=false -e USE_SYMPTOM_PUBLIC_DATA=false meong-care-mcp
-```
+- TypeScript build
+- 도메인 룰 테스트
+- JSON 기록 저장 테스트
+- MCP 서버 health check
+- `tools/list`
+- tool metadata 규칙
+- 9개 tool 호출
+- 안전 문구 포함 여부
+- 금지 의료 표현 포함 여부
+- base64 전체 저장 방지
 
 ## Health Check
 
@@ -332,7 +357,7 @@ docker run --rm -p 3000:3000 -e PORT=3000 -e USE_PUBLIC_DATA_API=false -e USE_SY
 curl http://localhost:3000/health
 ```
 
-예상 응답:
+응답 예시:
 
 ```json
 {
@@ -344,46 +369,64 @@ curl http://localhost:3000/health
 
 ## 환경 변수
 
-`.env.example`을 참고해 `.env` 또는 배포 플랫폼의 환경 변수를 구성합니다.
+`.env`는 현재 Git 추적 대상입니다. 비밀키는 private 저장소 정책에 맞게 관리하세요.
 
 ```env
 PORT=3000
+
 PUBLIC_DATA_SERVICE_KEY=
 PUBLIC_DATA_ANIMAL_HOSPITAL_API_URL=https://apis.data.go.kr/1741000/animal_hospitals/info
 USE_PUBLIC_DATA_API=false
+
 PUBLIC_DATA_SYMPTOM_API_URL=
 USE_SYMPTOM_PUBLIC_DATA=false
-PHOTO_RECORDS_PATH=
-FOOD_INGESTION_RECORDS_PATH=
+
+PHOTO_RECORDS_PATH=src/data/photoRecords.json
+FOOD_INGESTION_RECORDS_PATH=src/data/foodIngestionRecords.json
+
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=claude-sonnet-4-6
 ```
 
-환경 변수가 누락되어도 서버는 시작됩니다. 공공데이터 API 사용이 꺼져 있거나 API 호출이 실패하면 로컬 샘플 데이터로 fallback합니다.
+설명:
+
+- `PORT`: 서버 실행 포트입니다.
+- `PUBLIC_DATA_SERVICE_KEY`: 공공데이터포털 API 키입니다.
+- `PUBLIC_DATA_ANIMAL_HOSPITAL_API_URL`: 동물병원 API URL입니다.
+- `USE_PUBLIC_DATA_API`: `true`이면 공공데이터 API를 우선 사용합니다.
+- `PUBLIC_DATA_SYMPTOM_API_URL`: 증상 사전 API URL입니다. 현재는 미설정 시 로컬 샘플을 사용합니다.
+- `USE_SYMPTOM_PUBLIC_DATA`: `true`이면 증상 사전 API 사용을 시도합니다.
+- `PHOTO_RECORDS_PATH`: 사진 기록 JSON 저장 경로입니다.
+- `FOOD_INGESTION_RECORDS_PATH`: 위험 음식 섭취 기록 JSON 저장 경로입니다.
+- `ANTHROPIC_API_KEY`: Anthropic 사진 관찰 보조 API 키입니다.
+- `ANTHROPIC_MODEL`: Anthropic 모델명입니다.
+
+## Anthropic 사진 관찰 보조
+
+`record_pet_photo_observation`에서 `imageBase64`가 들어오고 `ANTHROPIC_API_KEY`가 설정되어 있으면 Anthropic Messages API를 호출해 사진 관찰 보조를 시도합니다.
+
+안전 원칙:
+
+- 병명, 원인, 치료법을 단정하지 않습니다.
+- 사진에 보이는 색상, 형태, 점액질/혈변처럼 보이는 부분, 붉은기, 각질, 탈모 범위 등 객관적 특징만 정리합니다.
+- API 호출 실패 시 서버는 죽지 않고 룰 기반 fallback 또는 실패 안내를 반환합니다.
 
 ## 기록 데이터 저장
 
-사진 기록과 위험 음식 섭취 기록은 MVP 기준으로 JSON 파일에 저장합니다.
+MVP 기준으로 기록은 JSON 파일에 저장합니다.
 
-- 사진 기록 기본 경로: `src/data/photoRecords.json`
-- 위험 음식 섭취 기록 기본 경로: `src/data/foodIngestionRecords.json`
-- 배포 환경에서는 `PHOTO_RECORDS_PATH`, `FOOD_INGESTION_RECORDS_PATH`로 저장 경로를 지정할 수 있습니다.
-- 기록 파일이 없으면 자동 생성합니다.
-- 기록 파일이 손상되었거나 JSON 배열이 아니면 기존 내용을 `.invalid-*.bak` 파일로 보존하고 새 기록 파일을 다시 생성합니다.
-- 동시에 기록 요청이 들어와도 같은 파일에 대한 쓰기를 순차 처리합니다.
-- `imageBase64` 원문은 저장하지 않고 `[base64 omitted]` 또는 짧은 preview만 저장합니다.
+- 사진 기록: `src/data/photoRecords.json`
+- 위험 음식 섭취 기록: `src/data/foodIngestionRecords.json`
 
-## 공공데이터 API
-
-동물병원 검색은 공공데이터포털의 동물병원 조회 API URL을 사용할 수 있습니다.
-
-- API 키가 없거나 `USE_PUBLIC_DATA_API=false`이면 `src/data/animalHospitals.sample.json`을 사용합니다.
-- `PUBLIC_DATA_SERVICE_KEY`를 입력하고 `USE_PUBLIC_DATA_API=true`로 설정하면 실시간 API 호출을 시도합니다.
-- API 오류, 인증 오류, 응답 형식 차이, 결과 없음이 발생하면 서버는 죽지 않고 로컬 샘플 데이터로 fallback합니다.
-
-증상 분류 API는 현재 확인 가능한 공식 OpenAPI가 없어 `src/data/symptomDictionary.sample.json` 로컬 사전을 기본으로 사용합니다.
+파일이 없으면 자동 생성됩니다. JSON이 깨져 있으면 기존 파일은 백업하고 새 배열로 복구합니다.
 
 ## PlayMCP 등록
 
 PlayMCP에는 배포된 서버의 Streamable HTTP endpoint를 등록합니다.
+
+```text
+https://<배포도메인>/mcp
+```
 
 로컬 테스트 endpoint:
 
@@ -391,45 +434,39 @@ PlayMCP에는 배포된 서버의 Streamable HTTP endpoint를 등록합니다.
 http://localhost:3000/mcp
 ```
 
-배포 후 endpoint:
-
-```text
-https://your-domain.example/mcp
-```
-
-등록 전 확인 순서:
-
-1. `npm run validate`
-2. `npm start`
-3. `GET /health` 응답 확인
-4. PlayMCP endpoint에 `/mcp` 경로 등록
-5. `tools/list`에서 8개 tool 노출 확인
-6. `record_food_ingestion_event`가 tool 목록에 표시되는지 확인
-
 ## KakaoCloud Git 소스 빌드
 
-카카오클라우드 PlayMCP in KC 화면에서 Git 소스 빌드를 사용할 때는 아래 값을 입력합니다.
+KakaoCloud PlayMCP in KC에서 Git 소스 빌드를 사용할 때:
 
-- Git URL: `https://github.com/jiwon-5570/meong-care-mcp`
-- 브랜치 / ref: `main`
-- Dockerfile 경로: `Dockerfile`
-- 컨테이너 포트: `3000`
-- Health check path: `/health`
-- MCP endpoint path: `/mcp`
+```text
+Git URL: https://github.com/jiwon-5570/meong-care-mcp
+Branch/ref: main
+Dockerfile path: Dockerfile
+```
 
-상세 배포 메모는 [kakao-cloud-deploy.md](./kakao-cloud-deploy.md)를 참고하세요.
+배포 후 PlayMCP 등록 endpoint:
+
+```text
+https://<KakaoCloud 배포 도메인>/mcp
+```
+
+## Docker 실행
+
+```bash
+docker build -t meong-care-mcp .
+docker run --rm -p 3000:3000 --env-file .env meong-care-mcp
+```
 
 ## 배포 체크리스트
 
 - `npm run build` 통과
+- `npm test` 통과
 - `npm run validate` 통과
-- `npm start` 실행 확인
-- `/health` 200 응답 확인
-- 배포 환경 변수 등록
-- PlayMCP에 `/mcp` endpoint 등록
+- `GET /health` 응답 확인
+- PlayMCP endpoint `/mcp` 등록
+- KakaoCloud 환경변수 설정
 - 공공데이터 API를 사용할 경우 `PUBLIC_DATA_SERVICE_KEY` 입력
-- 실제 API 사용 시 `USE_PUBLIC_DATA_API=true` 설정
-- `.env`는 GitHub에 업로드하지 않음
+- Anthropic 사진 관찰 보조를 사용할 경우 `ANTHROPIC_API_KEY` 입력
 
 ## 데모 질문
 
@@ -441,10 +478,6 @@ https://your-domain.example/mcp
 4. 강아지 변 사진을 기록해줘. 사진상 묽은 변처럼 보이고 어제부터 밥을 덜 먹어.
 5. 부산 진구 근처 동물병원 알려줘.
 6. 방금 증상들을 동물병원에 보여줄 수 있게 정리해줘.
-7. 우리 강아지가 방금 포도 한 알을 먹은 것 같아요. 몸무게는 11kg이에요.
-8. 샤인머스캣 두 알을 30분 전에 먹었어요. 아직 증상은 없어요.
-9. 초콜릿 포장지를 씹은 것 같아요. 사진도 기록해둘게요.
-10. 방금 위험 음식 섭취 기록을 병원에 보여줄 수 있게 요약해줘.
 
 ## 제출 요약
 
@@ -452,4 +485,6 @@ https://your-domain.example/mcp
 
 ## 의료 안전 고지
 
-멍케어노트 MCP의 안내는 진단이나 처방이 아닙니다. 반려견의 이상 증상이 심하거나 지속되면 수의사 상담을 권장합니다. 혈변, 반복 구토, 매우 심한 무기력, 식욕이 전혀 없는 상태, 호흡 이상처럼 위험 신호가 보이면 빠른 진료 권장을 우선해야 합니다.
+멍케어노트 MCP의 안내는 진단이나 처방이 아닙니다. 반려견의 이상 증상이 심하거나 지속되면 수의사 상담을 권장합니다.
+
+혈변, 반복 구토, 매우 심한 무기력, 식욕이 전혀 없는 상태, 호흡 이상처럼 위험 신호가 보이면 빠른 동물병원 상담을 우선해야 합니다.

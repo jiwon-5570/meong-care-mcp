@@ -28,7 +28,7 @@ const BUILT_IN_SYMPTOM_ENTRIES: SymptomDictionaryEntry[] = [
     canonicalSymptom: "식욕저하",
     category: "소화기/식욕",
     normalizedSymptom: "식욕 감소 또는 식욕 없음",
-    keywords: ["밥을 안 먹", "밥 안 먹", "사료 거부", "식욕부진", "식욕 저하", "식욕이 없", "입맛이 없"],
+    keywords: ["밥을 안 먹", "밥 안 먹", "사료 거부", "식욕부진", "식욕 저하", "식욕없", "입맛없"],
   },
   {
     canonicalSymptom: "무기력",
@@ -52,7 +52,7 @@ const BUILT_IN_SYMPTOM_ENTRIES: SymptomDictionaryEntry[] = [
     canonicalSymptom: "혈변 의심",
     category: "배변",
     normalizedSymptom: "혈변 또는 붉은 변",
-    keywords: ["피 섞인 변", "피가 나", "혈변", "빨간 변", "붉은 변"],
+    keywords: ["피 섞인 변", "피가 섞", "혈변", "빨간 변", "붉은 변"],
   },
   {
     canonicalSymptom: "가려움",
@@ -64,7 +64,7 @@ const BUILT_IN_SYMPTOM_ENTRIES: SymptomDictionaryEntry[] = [
     canonicalSymptom: "눈 분비물",
     category: "눈",
     normalizedSymptom: "눈물 또는 눈곱",
-    keywords: ["눈곱", "눈꼽", "눈물 많", "눈 분비물", "눈이 빨"],
+    keywords: ["눈곱", "눈꼽", "눈물 많", "눈 분비물", "눈이 붉"],
   },
   {
     canonicalSymptom: "기침",

@@ -34,9 +34,7 @@ export function buildMissingInfoQuestions(input: FoodIngestionEventInput): strin
   const questions: string[] = [];
 
   if (isBlank(input.foodDetail)) {
-    questions.push(
-      "어떤 음식인지 더 자세히 알려주세요. 예: 일반 포도, 샤인머스캣, 건포도, 포도즙",
-    );
+    questions.push("어떤 음식인지 더 자세히 알려주세요. 예: 일반 포도, 샤인머스캣, 건포도, 포도즙");
   }
 
   if (isBlank(input.amount)) {
@@ -71,7 +69,7 @@ export function buildImmediateGuide(
   if (riskLevel === "danger") {
     return [
       "빠른 동물병원 상담 권장: 음식 종류, 섭취량, 섭취 시간을 정리해 바로 문의하세요.",
-      "먹은 음식이나 포장지 사진이 있다면 병원 상담 때 함께 보여 주세요.",
+      "먹은 음식이나 포장지 사진이 있다면 병원 상담 시 함께 보여 주세요.",
       symptomGuide,
       "보호자 판단으로 임의로 약을 먹이거나 토하게 하지 마세요.",
     ];
@@ -133,7 +131,7 @@ function buildVetSummary(
   const memoLabel = summary.ownerMemo !== null ? ` 보호자 메모: ${summary.ownerMemo}` : "";
   const riskGuide = buildVetRiskGuide(riskLevel);
 
-  return `${weightLabel} ${dogLabel}이 ${summary.eatenAt}에 ${foodLabel} ${summary.amount}을(를) 섭취한 것으로 기록됨. 현재 확인된 증상: ${symptomLabel}. ${photoLabel}.${memoLabel} ${riskGuide}`;
+  return `${weightLabel} ${dogLabel}이 ${summary.eatenAt}에 ${foodLabel} ${summary.amount}을 섭취한 것으로 기록됨. 현재 확인된 증상: ${symptomLabel}. ${photoLabel}.${memoLabel} ${riskGuide}`;
 }
 
 function buildRiskTargetName(input: FoodIngestionEventInput): string {

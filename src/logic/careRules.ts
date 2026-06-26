@@ -104,7 +104,7 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
       snackRestriction: "가급적 제한: 증상이 사라질 때까지 간식은 적게 주는 편이 좋습니다.",
       waterCheck: buildWaterCheck(symptomContext, input.weightKg),
       walkIntensity: symptomContext.hasRespiratorySignal
-        ? "기침이나 호흡 관련 증상이 있으면 산책은 짧게 줄이고 흥분되는 활동은 피해주세요."
+        ? "기침이나 호흡 관련 증상이 있으면 산책은 짧게 줄이고 흥분하는 활동은 피해주세요."
         : "컨디션을 보며 짧고 편안한 산책으로 조절해 주세요.",
       restRecommendation: withContextNote("평소보다 조용하게 쉴 수 있는 시간을 마련해 주세요.", ageNote),
       symptomsToMonitor: buildSymptomsToMonitor(input.mainSymptoms, [
@@ -121,7 +121,7 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
     dogName: input.dogName,
     riskLevel: input.riskLevel,
     dietManagement: "평소에 잘 맞던 사료와 식사 시간을 유지해 주세요.",
-    snackRestriction: "과식하지 않는 범위에서 평소처럼 관리하고, 간식은 양을 확인해 주세요.",
+    snackRestriction: "과식하지 않는 범위에서 평소처럼 관리하고 간식 양을 확인해 주세요.",
     waterCheck: buildWaterCheck(symptomContext, input.weightKg),
     walkIntensity: "평소 컨디션에 맞춰 일반적인 산책을 진행해 주세요.",
     restRecommendation: withContextNote("충분한 수면과 휴식 시간을 유지해 주세요.", ageNote),
@@ -195,7 +195,7 @@ function getSymptomContext(mainSymptoms: string[]): SymptomContext {
 
   return {
     hasDigestiveSignal: containsAny(symptomText, ["구토", "설사", "변", "식욕", "먹은"]),
-    hasSkinOrEyeSignal: containsAny(symptomText, ["가려움", "눈물", "눈곱", "피부", "긁"]),
+    hasSkinOrEyeSignal: containsAny(symptomText, ["가려움", "눈물", "눈곱", "피부", "털"]),
     hasRespiratorySignal: containsAny(symptomText, ["기침", "호흡", "켁켁", "콜록"]),
     hasLowEnergySignal: containsAny(symptomText, ["무기력", "활동량", "처짐", "기운"]),
   };
@@ -207,7 +207,7 @@ function buildDietManagementForConsult(context: SymptomContext): string {
   }
 
   if (context.hasSkinOrEyeSignal) {
-    return "새 간식이나 새 단백질원처럼 최근 바뀐 음식이 있다면 기록하고 잠시 추가 급여를 피해주세요.";
+    return "새 간식이나 새 영양제처럼 최근 바뀐 음식이 있다면 기록하고 잠시 추가 급여를 피해주세요.";
   }
 
   return "평소 식단은 유지하되 새로운 음식 추가는 잠시 미뤄 주세요.";
@@ -227,14 +227,14 @@ function buildWaterCheck(context: SymptomContext, weightKg: number | undefined):
 
 function buildWalkIntensityForConsult(context: SymptomContext): string {
   if (context.hasRespiratorySignal) {
-    return "기침이나 호흡 관련 증상이 있으면 산책은 짧게 줄이고 흥분되는 활동은 피해주세요.";
+    return "기침이나 호흡 관련 증상이 있으면 산책은 짧게 줄이고 흥분하는 활동은 피해주세요.";
   }
 
   if (context.hasLowEnergySignal) {
     return "활동량이 줄었다면 산책은 배변 목적의 짧은 이동 정도로 제한해 주세요.";
   }
 
-  return "짧고 가벼운 배변 산책 정도로 줄이고 무리한 운동은 피해주세요.";
+  return "짧고 가벼운 배변 산책 정도로 줄이고 무리한 이동은 피해주세요.";
 }
 
 function buildRestRecommendationForConsult(context: SymptomContext): string {
@@ -251,7 +251,7 @@ function buildAgeCareNote(ageYears: number | undefined): string | undefined {
   }
 
   if (ageYears < 1) {
-    return "어린 강아지는 탈수나 컨디션 변화가 빠를 수 있어 변화가 이어지면 더 이르게 상담을 고려해 주세요.";
+    return "어린 강아지는 컨디션 변화가 빠를 수 있어 변화가 이어지면 더 이르게 상담을 고려해 주세요.";
   }
 
   if (ageYears >= 10) {

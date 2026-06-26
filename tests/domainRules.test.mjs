@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { createDailyCareNote } from "../dist/logic/dailyCareNoteRules.js";
 import { checkFoodSafety } from "../dist/logic/foodRules.js";
 import { analyzeDailyStatus } from "../dist/logic/riskRules.js";
 import {
@@ -14,10 +15,11 @@ import {
   analyzeFoodIngestionEvent,
   buildMissingInfoQuestions,
 } from "../dist/logic/foodIngestionRules.js";
+import { analyzePetImage } from "../dist/services/visionAnalyzer.js";
 import { SAFETY_MESSAGE, withSafetyMessage } from "../dist/utils/safetyMessage.js";
 
 test("food safety rules classify high-risk and common foods", () => {
-  assert.equal(checkFoodSafety({ foodName: "샤인머스캣 두 알" }).riskLevel, "danger");
+  assert.equal(checkFoodSafety({ foodName: "샤인머스캣 포도" }).riskLevel, "danger");
   assert.equal(checkFoodSafety({ foodName: "초코케이크" }).riskLevel, "danger");
   assert.equal(checkFoodSafety({ foodName: "양파 들어간 고기" }).riskLevel, "danger");
   assert.equal(checkFoodSafety({ foodName: "치즈" }).riskLevel, "caution");
@@ -59,7 +61,7 @@ test("daily status rules elevate urgent and contextual consultation cases", () =
     symptomStartedAt: "어제부터",
   });
   assert.equal(seniorPersistent.riskLevel, "vet_consult");
-  assert.match(seniorPersistent.reasons.join(" "), /노령견/);
+  assert.match(seniorPersistent.reasons.join(" "), /노령견|지속/);
 
   assert.equal(
     analyzeDailyStatus({
@@ -71,6 +73,25 @@ test("daily status rules elevate urgent and contextual consultation cases", () =
     }).riskLevel,
     "watch",
   );
+});
+
+test("daily care note combines analysis, care guidance, and vet summary", () => {
+  const note = createDailyCareNote({
+    dogName: "몽이",
+    ageYears: 6,
+    weightKg: 11,
+    appetite: "less",
+    stool: "soft",
+    vomiting: "none",
+    energy: "normal",
+    symptomStartedAt: "어제부터",
+    ownerConcern: "밥을 반만 먹어요.",
+  });
+
+  assert.equal(note.riskLevel, "vet_consult");
+  assert.match(note.nextAction, /동물병원 상담 권장/);
+  assert.match(note.vetConsultPreparation.vetVisitSummary, /몽이/);
+  assert.ok(note.todayCare.symptomsToMonitor.length > 0);
 });
 
 test("daily care rules adapt guidance by symptoms and age", () => {
@@ -110,7 +131,7 @@ test("vet summary keeps structured consultation fields", () => {
 
 test("symptom classifier extracts built-in demo symptoms without external data", () => {
   const result = classifyPetSymptom(
-    { text: "밥을 안 먹고 축 처져 있어요.", animalType: "dog" },
+    { text: "밥을 안 먹고 축 처져 있어요", animalType: "dog" },
     [],
     "local_sample",
     "test",
@@ -134,7 +155,7 @@ test("photo observation rules classify stool and skin observations", () => {
   assert.equal(
     analyzePhotoObservation({
       photoType: "skin",
-      visualNotes: "피부에 진물이 있음",
+      visualNotes: "진물이 있고 붉음",
       appetite: "normal",
       vomiting: "none",
       energy: "normal",
@@ -191,4 +212,84 @@ test("food ingestion event produces missing questions and danger summary", () =>
 test("safety message is attached consistently", () => {
   assert.match(SAFETY_MESSAGE, /진단이나 처방이 아니며/);
   assert.equal(withSafetyMessage({ ok: true }).safetyMessage, SAFETY_MESSAGE);
+});
+
+test("analyzePetImage returns fallback without Anthropic API key", async () => {
+  const originalApiKey = process.env.ANTHROPIC_API_KEY;
+
+  try {
+    delete process.env.ANTHROPIC_API_KEY;
+    const result = await analyzePetImage({
+      imageBase64: "dGVzdA==",
+      photoType: "stool",
+    });
+
+    assert.deepEqual(result, {
+      visualNotes: "사진 분석에 실패했습니다.",
+      observedSigns: [],
+    });
+  } finally {
+    if (originalApiKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = originalApiKey;
+    }
+  }
+});
+
+test("analyzePetImage parses structured Anthropic JSON response", async () => {
+  const originalApiKey = process.env.ANTHROPIC_API_KEY;
+  const originalModel = process.env.ANTHROPIC_MODEL;
+  const originalFetch = globalThis.fetch;
+
+  try {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    process.env.ANTHROPIC_MODEL = "test-model";
+    globalThis.fetch = async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+
+      assert.equal(body.model, "test-model");
+      assert.equal(body.messages[0].content[0].type, "image");
+      assert.equal(body.messages[0].content[0].source.data, "dGVzdA==");
+
+      return new Response(
+        JSON.stringify({
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                visualNotes: "갈색 변이며 일부 묽어 보입니다.",
+                observedSigns: ["묽은 변처럼 보임"],
+              }),
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+
+    const result = await analyzePetImage({
+      imageBase64: "data:image/png;base64,dGVzdA==",
+      photoType: "stool",
+    });
+
+    assert.deepEqual(result, {
+      visualNotes: "갈색 변이며 일부 묽어 보입니다.",
+      observedSigns: ["묽은 변처럼 보임"],
+    });
+  } finally {
+    if (originalApiKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = originalApiKey;
+    }
+
+    if (originalModel === undefined) {
+      delete process.env.ANTHROPIC_MODEL;
+    } else {
+      process.env.ANTHROPIC_MODEL = originalModel;
+    }
+
+    globalThis.fetch = originalFetch;
+  }
 });

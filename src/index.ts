@@ -6,6 +6,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
+import { createDailyCareNote } from "./logic/dailyCareNoteRules.js";
 import { checkFoodSafety } from "./logic/foodRules.js";
 import {
   analyzeDailyStatus,
@@ -28,7 +29,7 @@ const MCP_ENDPOINT = "/mcp";
 
 const app = express();
 app.disable("x-powered-by");
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "10mb" }));
 
 const transports: Record<string, StreamableHTTPServerTransport> = {};
 
@@ -134,20 +135,7 @@ function createMcpServer(): McpServer {
         openWorldHint: false,
         idempotentHint: true,
       },
-      inputSchema: {
-        dogName: z.string().min(1, "반려견 이름을 입력해 주세요."),
-        ageYears: z.number().min(0).optional(),
-        weightKg: z.number().positive().optional(),
-        appetite: z.enum(["normal", "less", "none", "increased"]),
-        stool: z.enum(["normal", "soft", "diarrhea", "bloody", "unknown"]),
-        vomiting: z.enum(["none", "once", "multiple"]),
-        energy: z.enum(["normal", "low", "very_low"]),
-        coughing: z.boolean().optional(),
-        itching: z.boolean().optional(),
-        eyeDischarge: z.boolean().optional(),
-        foodOrSnackToday: z.array(z.string()).optional(),
-        symptomStartedAt: z.string().optional(),
-      },
+      inputSchema: dailyStatusSchema(),
     },
     async (input) => {
       const analysis = analyzeDailyStatus(input);
@@ -172,6 +160,30 @@ function createMcpServer(): McpServer {
         ],
       });
 
+      return toToolResponse(result);
+    },
+  );
+
+  server.registerTool(
+    "create_daily_care_note",
+    {
+      title: "Create Daily Dog Care Note",
+      description:
+        "Creates one combined daily care note with risk classification, diet, walk, rest guidance, and vet summary in MeongCareNote MCP(멍케어노트 MCP).",
+      annotations: {
+        title: "Create Daily Dog Care Note",
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
+      inputSchema: {
+        ...dailyStatusSchema(),
+        ownerConcern: z.string().optional(),
+      },
+    },
+    async (input) => {
+      const result = withSafetyMessage(createDailyCareNote(input));
       return toToolResponse(result);
     },
   );
@@ -301,7 +313,7 @@ function createMcpServer(): McpServer {
     {
       title: "Record Pet Photo Observation",
       description:
-        "Records stool or skin photo observations and summarizes visible concern signs in MeongCareNote MCP(멍케어노트 MCP).",
+        "Records stool or skin photo observations and summarizes visible concern signs without diagnosis in MeongCareNote MCP(멍케어노트 MCP).",
       annotations: {
         title: "Record Pet Photo Observation",
         readOnlyHint: false,
@@ -362,6 +374,23 @@ function createMcpServer(): McpServer {
   );
 
   return server;
+}
+
+function dailyStatusSchema() {
+  return {
+    dogName: z.string().min(1, "반려견 이름을 입력해 주세요."),
+    ageYears: z.number().min(0).optional(),
+    weightKg: z.number().positive().optional(),
+    appetite: z.enum(["normal", "less", "none", "increased"]),
+    stool: z.enum(["normal", "soft", "diarrhea", "bloody", "unknown"]),
+    vomiting: z.enum(["none", "once", "multiple"]),
+    energy: z.enum(["normal", "low", "very_low"]),
+    coughing: z.boolean().optional(),
+    itching: z.boolean().optional(),
+    eyeDischarge: z.boolean().optional(),
+    foodOrSnackToday: z.array(z.string()).optional(),
+    symptomStartedAt: z.string().optional(),
+  };
 }
 
 async function handleExistingMcpSession(req: Request, res: Response): Promise<void> {
