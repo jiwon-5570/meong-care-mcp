@@ -18,7 +18,7 @@ const BANNED_PHRASES = [
   "병원 안 가도 됩니다",
 ];
 const EXPECTED_SAFETY_MESSAGE_PART = "진단이나 처방이 아니며";
-const MOJIBAKE_HINTS = ["占", "筌", "癰", "�", "硫", "蹂", "諛", "湲"];
+const MOJIBAKE_HINTS = ["\u5360", "\u7b4c", "\u7670", "\ufffd", "\uf9ce", "\u8e42", "\u8adb", "\u6e72"];
 
 const photoRecordsPath = path.join(tmpdir(), `meong-photo-records-${Date.now()}.json`);
 const foodRecordsPath = path.join(tmpdir(), `meong-food-records-${Date.now()}.json`);
@@ -143,6 +143,27 @@ const toolCases = [
     },
     assert: (payload) => {
       assert(typeof payload.vetVisitSummary === "string", "create_vet_visit_summary should include vetVisitSummary.");
+    },
+  },
+  {
+    name: "summarize_pet_chat_for_vet",
+    args: {
+      dogName: "몽이",
+      ageYears: 6,
+      weightKg: 11,
+      sourceType: "screenshot_ocr",
+      chatText:
+        "엄마: 몽이가 아침부터 밥을 거의 안 먹어. 동생: 변이 좀 묽은 것 같아. 나: 구토는 있었어? 엄마: 구토는 안 했는데 계속 누워 있어. 동생: 어제 닭가슴살 조금 먹었대.",
+      ownerMemo: "가족방 캡처에서 읽은 내용",
+    },
+    assert: (payload) => {
+      assert(Array.isArray(payload.extractedSymptoms), "summarize_pet_chat_for_vet should include extractedSymptoms.");
+      assert(typeof payload.vetVisitSummary === "string", "summarize_pet_chat_for_vet should include vetVisitSummary.");
+      assert(typeof payload.privacyNotice === "string", "summarize_pet_chat_for_vet should include privacyNotice.");
+      assert(
+        ["watch", "vet_consult"].includes(payload.riskLevel),
+        "summarize_pet_chat_for_vet should classify demo chat as watch or vet_consult.",
+      );
     },
   },
   {

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createDailyCareNote } from "../dist/logic/dailyCareNoteRules.js";
+import { summarizePetChatForVet } from "../dist/logic/chatSummaryRules.js";
 import { checkFoodSafety } from "../dist/logic/foodRules.js";
 import { analyzeDailyStatus } from "../dist/logic/riskRules.js";
 import {
@@ -92,6 +93,48 @@ test("daily care note combines analysis, care guidance, and vet summary", () => 
   assert.match(note.nextAction, /동물병원 상담 권장/);
   assert.match(note.vetConsultPreparation.vetVisitSummary, /몽이/);
   assert.ok(note.todayCare.symptomsToMonitor.length > 0);
+});
+
+test("pet chat summary extracts symptoms and creates vet summary", () => {
+  const summary = summarizePetChatForVet({
+    dogName: "몽이",
+    ageYears: 6,
+    weightKg: 11,
+    sourceType: "screenshot_ocr",
+    chatText: `
+엄마: 몽이가 아침부터 밥을 거의 안 먹어.
+동생: 변이 좀 묽은 것 같아.
+나: 구토는 있었어?
+엄마: 구토는 안 했는데 계속 누워 있어.
+동생: 어제 닭가슴살 조금 먹었대.
+    `,
+    ownerMemo: "가족방 캡처에서 읽은 내용",
+  });
+
+  assert.ok(summary.extractedSymptoms.some((symptom) => symptom.includes("식욕")));
+  assert.ok(summary.extractedSymptoms.some((symptom) => symptom.includes("묽은 변")));
+  assert.ok(summary.extractedSymptoms.some((symptom) => symptom.includes("무기력") || symptom.includes("활동량")));
+  assert.ok(["less", "none"].includes(summary.appetiteStatus));
+  assert.equal(summary.stoolStatus, "soft");
+  assert.equal(summary.vomitingStatus, "none");
+  assert.ok(["low", "very_low"].includes(summary.energyStatus));
+  assert.ok(summary.foodMentions.some((food) => food.includes("닭가슴살")));
+  assert.ok(["watch", "vet_consult"].includes(summary.riskLevel));
+  assert.equal(typeof summary.vetVisitSummary, "string");
+  assert.match(summary.privacyNotice, /직접 조회하지/);
+});
+
+test("pet chat summary elevates dangerous food mention to urgent", () => {
+  const summary = summarizePetChatForVet({
+    dogName: "몽이",
+    weightKg: 11,
+    sourceType: "manual_memo",
+    chatText: "샤인머스캣 한 알을 30분 전에 먹었대. 아직 증상은 없어.",
+  });
+
+  assert.equal(summary.riskLevel, "urgent");
+  assert.ok(summary.foodMentions.some((food) => food.includes("샤인머스캣")));
+  assert.match(summary.riskReasons.join(" "), /위험 음식|빠른 동물병원 상담 권장/);
 });
 
 test("daily care rules adapt guidance by symptoms and age", () => {

@@ -6,6 +6,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
+import { summarizePetChatForVet } from "./logic/chatSummaryRules.js";
 import { createDailyCareNote } from "./logic/dailyCareNoteRules.js";
 import { checkFoodSafety } from "./logic/foodRules.js";
 import {
@@ -249,6 +250,37 @@ function createMcpServer(): McpServer {
     },
     async (input) => {
       const result = withSafetyMessage(createVetVisitSummary(input));
+      return toToolResponse(result);
+    },
+  );
+
+  server.registerTool(
+    "summarize_pet_chat_for_vet",
+    {
+      title: "Summarize Pet Chat For Vet",
+      description:
+        "Summarizes user-provided family chat text, guardian memo, or text extracted from a screenshot into a veterinary consultation note. It only analyzes text provided by the user, does not directly access KakaoTalk chat rooms, and does not diagnose disease or prescribe treatment in MeongCareNote MCP(멍케어노트 MCP).",
+      annotations: {
+        title: "Summarize Pet Chat For Vet",
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      },
+      inputSchema: {
+        dogName: z.string().optional(),
+        ageYears: z.number().min(0).optional(),
+        weightKg: z.number().positive().optional(),
+        sourceType: z.enum(["pasted_text", "screenshot_ocr", "manual_memo"]),
+        chatText: z.string().min(1, "분석할 대화 내용 또는 캡처에서 추출된 텍스트를 입력해 주세요."),
+        chatStartedAt: z.string().optional(),
+        chatEndedAt: z.string().optional(),
+        screenshotTakenAt: z.string().optional(),
+        ownerMemo: z.string().optional(),
+      },
+    },
+    async (input) => {
+      const result = withSafetyMessage(summarizePetChatForVet(input));
       return toToolResponse(result);
     },
   );

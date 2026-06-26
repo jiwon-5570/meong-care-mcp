@@ -12,7 +12,7 @@
 - Express 기반 Streamable HTTP MCP 서버
 - `GET /health`
 - `POST /mcp`
-- MCP tools 9개 구현
+- MCP tools 10개 구현
 - Dockerfile 포함
 - KakaoCloud Git 소스 빌드 대응
 - 공공데이터 API 실패 시 로컬 샘플 fallback
@@ -28,6 +28,7 @@
 - 통합 일상 케어 노트 생성
 - 식단, 물 섭취, 산책, 휴식 관리 추천
 - 동물병원 상담용 증상 요약문 생성
+- 가족 대화/캡처 OCR 텍스트 기반 병원 상담용 요약 생성
 - 지역 기반 동물병원 후보 안내
 - 자연어 증상 표현 분류
 - 변/피부 사진 관찰 기록
@@ -52,6 +53,7 @@
 | `create_daily_care_note` | 오늘 상태 입력 한 번으로 위험도, 식단, 산책, 휴식, 관찰 항목, 병원 상담용 요약을 함께 생성합니다. |
 | `recommend_daily_care` | 위험도와 주요 증상을 바탕으로 오늘의 식단, 물 섭취, 산책, 휴식 관리 행동을 추천합니다. |
 | `create_vet_visit_summary` | 동물병원 상담 시 보여줄 수 있는 증상 요약문과 질문 목록을 생성합니다. |
+| `summarize_pet_chat_for_vet` | 사용자가 제공한 가족 대화 내용, 보호자 메모, 또는 캡처에서 추출된 텍스트를 바탕으로 반려견 상태를 정리하고 동물병원 상담용 요약을 생성합니다. 카카오톡 채팅방을 직접 조회하지 않습니다. |
 | `find_nearby_animal_hospitals` | 지역명 기반으로 동물병원 후보를 안내합니다. 공공데이터 API 또는 로컬 샘플 데이터를 사용합니다. |
 | `classify_pet_symptom` | 보호자의 자연어 증상 표현을 증상명, 카테고리, 정규화된 표현으로 정리합니다. |
 | `record_pet_photo_observation` | 변/피부 사진과 보호자 관찰 내용을 기록하고 이상 징후를 정리합니다. |
@@ -187,6 +189,49 @@
 - 수의사에게 물어볼 질문 목록
 - 안전 문구
 
+### `summarize_pet_chat_for_vet`
+
+사용자가 제공한 가족 대화 내용, 보호자 메모, 또는 캡처에서 추출된 텍스트를 분석해 병원 상담 전 보여줄 수 있는 요약을 생성합니다.
+
+중요:
+
+- 카카오톡 채팅방을 직접 조회하지 않습니다.
+- 카카오톡 방 목록, 메시지, 가족방 대화 내역을 서버가 가져오지 않습니다.
+- 사용자가 직접 붙여넣은 텍스트 또는 Agent/OCR이 캡처 이미지에서 읽어낸 텍스트만 분석합니다.
+- 이미지 URL이나 `imageBase64`를 직접 입력받지 않습니다.
+- 질병 진단이나 약 처방이 아니라 병원 상담 준비를 돕는 기능입니다.
+
+입력:
+
+- `dogName?: string`
+- `ageYears?: number`
+- `weightKg?: number`
+- `sourceType: "pasted_text" | "screenshot_ocr" | "manual_memo"`
+- `chatText: string`
+- `chatStartedAt?: string`
+- `chatEndedAt?: string`
+- `screenshotTakenAt?: string`
+- `ownerMemo?: string`
+
+출력:
+
+- 분석 텍스트 요약
+- 추출된 시간 흐름
+- 추출된 증상
+- 식욕/변/구토/활동량 상태
+- 음식 언급
+- 위험도
+- 판단 이유
+- 부족한 정보 질문
+- 병원 상담용 요약문
+- 수의사에게 물어볼 질문
+- 개인정보 주의 문구
+- 안전 문구
+
+개인정보 주의:
+
+가족방 캡처나 대화 내용에는 개인정보가 포함될 수 있으므로 반려견 상태와 무관한 이름, 전화번호, 주소 등은 가리거나 제외한 뒤 사용하는 것을 권장합니다.
+
 ### `find_nearby_animal_hospitals`
 
 지역명 기반으로 동물병원 후보를 안내합니다.
@@ -261,6 +306,7 @@ meong-care-mcp/
 │  │  └─ symptomDictionary.sample.json
 │  ├─ logic/
 │  │  ├─ careRules.ts
+│  │  ├─ chatSummaryRules.ts
 │  │  ├─ dailyCareNoteRules.ts
 │  │  ├─ foodIngestionRules.ts
 │  │  ├─ foodRules.ts
@@ -346,7 +392,7 @@ npm run validate
 - MCP 서버 health check
 - `tools/list`
 - tool metadata 규칙
-- 9개 tool 호출
+- 10개 tool 호출
 - 안전 문구 포함 여부
 - 금지 의료 표현 포함 여부
 - base64 전체 저장 방지
@@ -478,6 +524,8 @@ docker run --rm -p 3000:3000 --env-file .env meong-care-mcp
 4. 강아지 변 사진을 기록해줘. 사진상 묽은 변처럼 보이고 어제부터 밥을 덜 먹어.
 5. 부산 진구 근처 동물병원 알려줘.
 6. 방금 증상들을 동물병원에 보여줄 수 있게 정리해줘.
+7. 가족방 대화 캡처에서 읽은 내용이야. 병원 가기 전에 정리해줘. 엄마: 몽이가 아침부터 밥을 거의 안 먹어. 동생: 변이 좀 묽은 것 같아. 나: 구토는 있었어? 엄마: 구토는 안 했는데 계속 누워 있어. 몽이는 6살이고 11kg이야.
+8. 가족방에서 샤인머스캣 한 알을 30분 전에 먹었다고 했어. 아직 증상은 없대. 병원 상담용으로 정리해줘.
 
 ## 제출 요약
 
