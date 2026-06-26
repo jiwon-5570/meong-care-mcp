@@ -14,6 +14,7 @@ import {
   type StoolStatus,
   type VomitingStatus,
 } from "./riskRules.js";
+import type { RiskPresentation } from "./riskPresentationRules.js";
 
 export type DailyCareNoteInput = DailyStatusInput;
 
@@ -25,6 +26,7 @@ export interface DailyCareNoteResult {
   knownInfo: string[];
   missingInfoQuestions: string[];
   currentAssessment: string;
+  riskPresentation: RiskPresentation;
   userFriendlyGuide: string;
   todayCare: DailyCareRecommendation;
   vetConsultPreparation: VetVisitSummaryResult;
@@ -57,6 +59,7 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     foodOrSnackToday: normalized.foodOrSnackToday,
     ownerConcern: normalized.ownerConcern,
     missingInfoQuestions: analysis.missingInfoQuestions,
+    riskLevel: analysis.riskLevel,
   });
 
   return {
@@ -67,46 +70,34 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     knownInfo: analysis.knownInfo,
     missingInfoQuestions: analysis.missingInfoQuestions,
     currentAssessment: analysis.currentAssessment,
+    riskPresentation: analysis.riskPresentation,
     userFriendlyGuide: buildUserFriendlyGuide(
       analysis.dogName,
-      analysis.riskLevel,
+      analysis.riskPresentation,
       analysis.currentAssessment,
       symptomsForSummary,
       analysis.missingInfoQuestions,
     ),
     todayCare,
     vetConsultPreparation,
-    nextAction: buildNextAction(analysis.riskLevel, analysis.missingInfoQuestions),
+    nextAction: buildNextAction(analysis.riskPresentation, analysis.missingInfoQuestions),
   };
 }
 
-function buildNextAction(riskLevel: DailyRiskLevel, missingInfoQuestions: string[]): string {
-  if (riskLevel === "urgent") {
-    return "빠른 동물병원 상담 권장: 먹은 음식, 증상 시작 시점, 현재 증상, 사진이나 포장지 정보를 정리해 바로 문의해 주세요.";
-  }
+function buildNextAction(
+  riskPresentation: RiskPresentation,
+  missingInfoQuestions: string[],
+): string {
+  const missingInfoText = missingInfoQuestions.length > 0
+    ? ` 추가 확인: ${missingInfoQuestions.slice(0, 3).join(" / ")}`
+    : "";
 
-  if (riskLevel === "vet_consult") {
-    return "동물병원 상담 권장: 식욕, 변, 구토, 활동량 변화와 증상 시작 시점을 정리해 상담해 주세요.";
-  }
-
-  if (riskLevel === "watch") {
-    if (missingInfoQuestions.length > 0) {
-      return `오늘은 관찰을 강화하고 추가 정보를 확인해 주세요: ${missingInfoQuestions.slice(0, 3).join(" / ")}`;
-    }
-
-    return "오늘은 관찰을 강화하고 식욕, 변, 구토, 활동량 변화를 기록해 주세요.";
-  }
-
-  if (missingInfoQuestions.length > 0) {
-    return `평소 루틴을 유지하되 부족한 정보를 확인해 주세요: ${missingInfoQuestions.slice(0, 3).join(" / ")}`;
-  }
-
-  return "평소 루틴 유지: 식사, 물 섭취, 산책, 휴식을 평소처럼 관리해 주세요.";
+  return `${riskPresentation.riskLabel}: ${riskPresentation.immediateAction}${missingInfoText}`;
 }
 
 function buildUserFriendlyGuide(
   dogName: string,
-  riskLevel: DailyRiskLevel,
+  riskPresentation: RiskPresentation,
   currentAssessment: string,
   symptoms: string[],
   missingInfoQuestions: string[],
@@ -116,19 +107,14 @@ function buildUserFriendlyGuide(
     ? `추가로 ${missingInfoQuestions.slice(0, 3).join(" ")}`
     : "추가로 확인할 큰 누락 정보는 많지 않습니다.";
 
-  if (riskLevel === "urgent") {
-    return `${dogName}의 기록에는 빠른 동물병원 상담을 권장할 만한 신호가 있습니다. 주요 내용은 ${symptomText}입니다. ${missingText}`;
-  }
-
-  if (riskLevel === "vet_consult") {
-    return `${dogName}의 현재 기록은 동물병원 상담을 고려할 만한 상태입니다. ${currentAssessment} 주요 내용은 ${symptomText}입니다. ${missingText}`;
-  }
-
-  if (riskLevel === "watch") {
-    return `${dogName}의 현재 기록은 관찰이 필요한 상태로 보입니다. ${currentAssessment} 주요 내용은 ${symptomText}입니다. ${missingText}`;
-  }
-
-  return `${dogName}의 현재 기록에는 뚜렷한 이상 신호가 많지 않습니다. ${currentAssessment} ${missingText}`;
+  return [
+    riskPresentation.riskBadge,
+    `${dogName}의 현재 기록: ${riskPresentation.urgencyTitle}`,
+    `바로 할 일: ${riskPresentation.immediateAction}`,
+    `주요 내용: ${symptomText}`,
+    currentAssessment,
+    missingText,
+  ].join("\n");
 }
 
 function formatAppetiteStatus(value: AppetiteStatus): string {

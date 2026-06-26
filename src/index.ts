@@ -156,6 +156,7 @@ function createMcpServer(): McpServer {
         knownInfo: analysis.knownInfo,
         missingInfoQuestions: analysis.missingInfoQuestions,
         currentAssessment: analysis.currentAssessment,
+        riskPresentation: analysis.riskPresentation,
         todayCareRecommendations: [
           care.dietManagement,
           care.snackRestriction,
@@ -248,6 +249,7 @@ function createMcpServer(): McpServer {
         foodOrSnackToday: z.array(z.string()).optional(),
         ownerConcern: z.string().optional(),
         missingInfoQuestions: z.array(z.string()).optional(),
+        riskLevel: z.enum(["normal", "watch", "vet_consult", "urgent"]).optional(),
       },
     },
     async (input) => {

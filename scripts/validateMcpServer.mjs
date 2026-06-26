@@ -16,6 +16,10 @@ const BANNED_PHRASES = [
   "이 병입니다",
   "이 약을 먹이세요",
   "병원 안 가도 됩니다",
+  "진단했습니다",
+  "처방합니다",
+  "정상 괜찮습니다",
+  "완치",
 ];
 const EXPECTED_SAFETY_MESSAGE_PART = "진단이나 처방이 아니며";
 const MOJIBAKE_HINTS = ["\u5360", "\u7b4c", "\u7670", "\ufffd", "\uf9ce", "\u8e42", "\u8adb", "\u6e72"];
@@ -33,6 +37,11 @@ const toolCases = [
     },
     assert: (payload) => {
       assert(payload.riskLevel === "danger", "check_food_safety should classify grape as danger.");
+      assert(payload.riskPresentation?.severityOrder === 4, "check_food_safety should include high severity riskPresentation.");
+      assert(
+        String(payload.riskPresentation?.riskBadge).includes("🚨"),
+        "check_food_safety danger should include urgent visual badge.",
+      );
       assert(
         JSON.stringify(payload).includes("빠른 동물병원 상담 권장"),
         "check_food_safety should include fast vet consultation guidance for grape.",
@@ -68,6 +77,11 @@ const toolCases = [
     },
     assert: (payload) => {
       assert(payload.riskLevel === "urgent", "analyze_daily_status should elevate dangerous food ingestion to urgent.");
+      assert(payload.riskPresentation?.severityOrder === 4, "analyze_daily_status urgent should include high severity presentation.");
+      assert(
+        String(payload.riskPresentation?.immediateAction).includes("동물병원"),
+        "analyze_daily_status urgent presentation should include vet consultation action.",
+      );
       assert(
         JSON.stringify(payload).includes("위험 음식"),
         "analyze_daily_status should explain dangerous food context.",
@@ -145,6 +159,7 @@ const toolCases = [
         "create_daily_care_note should include follow-up questions for incomplete input.",
       );
       assert(typeof payload.userFriendlyGuide === "string", "create_daily_care_note should include userFriendlyGuide.");
+      assert(typeof payload.riskPresentation?.riskBadge === "string", "create_daily_care_note should include riskPresentation.");
     },
   },
   {
@@ -158,6 +173,7 @@ const toolCases = [
     },
     assert: (payload) => {
       assert(Array.isArray(payload.symptomsToMonitor), "recommend_daily_care should include symptomsToMonitor.");
+      assert(typeof payload.riskPresentation?.riskBadge === "string", "recommend_daily_care should include riskPresentation.");
     },
   },
   {
@@ -194,6 +210,7 @@ const toolCases = [
       assert(Array.isArray(payload.extractedSymptoms), "summarize_pet_chat_for_vet should include extractedSymptoms.");
       assert(typeof payload.vetVisitSummary === "string", "summarize_pet_chat_for_vet should include vetVisitSummary.");
       assert(typeof payload.privacyNotice === "string", "summarize_pet_chat_for_vet should include privacyNotice.");
+      assert(typeof payload.riskPresentation?.riskBadge === "string", "summarize_pet_chat_for_vet should include riskPresentation.");
       assert(
         ["watch", "vet_consult"].includes(payload.riskLevel),
         "summarize_pet_chat_for_vet should classify demo chat as watch or vet_consult.",
@@ -240,6 +257,7 @@ const toolCases = [
     },
     assert: (payload) => {
       assert(typeof payload.photoRecordId === "string", "record_pet_photo_observation should include photoRecordId.");
+      assert(typeof payload.riskPresentation?.riskBadge === "string", "record_pet_photo_observation should include riskPresentation.");
     },
   },
   {
@@ -255,6 +273,10 @@ const toolCases = [
     },
     assert: (payload) => {
       assert(payload.riskLevel === "danger", "record_food_ingestion_event should classify grape as danger.");
+      assert(
+        String(payload.riskPresentation?.riskBadge).includes("🚨"),
+        "record_food_ingestion_event danger should include urgent visual badge.",
+      );
       assert(
         JSON.stringify(payload).includes("빠른 동물병원 상담 권장"),
         "record_food_ingestion_event should include fast vet consultation guidance for danger.",
@@ -496,6 +518,25 @@ function validateToolPayload(toolName, payload) {
 
   for (const phrase of BANNED_PHRASES) {
     assert(!serialized.includes(phrase), `${toolName} contains banned medical phrase: ${phrase}`);
+  }
+
+  if (typeof payload.riskLevel === "string") {
+    assert(
+      typeof payload.riskPresentation === "object" && payload.riskPresentation !== null,
+      `${toolName} should include riskPresentation when riskLevel is present.`,
+    );
+    assert(
+      typeof payload.riskPresentation.riskBadge === "string",
+      `${toolName} riskPresentation.riskBadge is required.`,
+    );
+    assert(
+      typeof payload.riskPresentation.immediateAction === "string",
+      `${toolName} riskPresentation.immediateAction is required.`,
+    );
+    assert(
+      typeof payload.riskPresentation.severityOrder === "number",
+      `${toolName} riskPresentation.severityOrder is required.`,
+    );
   }
 }
 

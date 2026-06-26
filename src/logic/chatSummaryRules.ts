@@ -1,4 +1,5 @@
 import { checkFoodSafety } from "./foodRules.js";
+import { buildDailyRiskPresentation, type RiskPresentation } from "./riskPresentationRules.js";
 import type {
   AppetiteStatus,
   DailyRiskLevel,
@@ -38,6 +39,7 @@ export interface PetChatSummaryResult {
   foodMentions: string[];
   riskLevel: DailyRiskLevel;
   riskReasons: string[];
+  riskPresentation: RiskPresentation;
   missingInfoQuestions: string[];
   vetVisitSummary: string;
   questionsForVet: string[];
@@ -89,9 +91,14 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
   const normalizedText = normalize(text);
   const signals = extractSignals(text, normalizedText);
   const risk = classifyChatRisk(input, signals, normalizedText);
+  const riskPresentation = buildDailyRiskPresentation(
+    risk.riskLevel,
+    risk.riskReasons,
+    signals.extractedSymptoms,
+  );
   const timeline = extractTimeline(input, text, normalizedText);
   const missingInfoQuestions = buildMissingInfoQuestions(input, signals, timeline, normalizedText);
-  const analyzedTextSummary = buildAnalyzedTextSummary(input, signals, risk.riskLevel);
+  const analyzedTextSummary = buildAnalyzedTextSummary(input, signals, risk.riskLevel, riskPresentation);
 
   return {
     sourceType: input.sourceType,
@@ -108,8 +115,16 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
     foodMentions: signals.foodMentions,
     riskLevel: risk.riskLevel,
     riskReasons: risk.riskReasons,
+    riskPresentation,
     missingInfoQuestions,
-    vetVisitSummary: buildVetVisitSummary(input, signals, risk.riskLevel, risk.riskReasons, timeline),
+    vetVisitSummary: buildVetVisitSummary(
+      input,
+      signals,
+      risk.riskLevel,
+      risk.riskReasons,
+      riskPresentation,
+      timeline,
+    ),
     questionsForVet: buildQuestionsForVet(signals, risk.riskLevel),
     privacyNotice: PRIVACY_NOTICE,
   };
@@ -450,12 +465,13 @@ function buildAnalyzedTextSummary(
   input: PetChatSummaryInput,
   signals: ExtractedChatSignals,
   riskLevel: DailyRiskLevel,
+  riskPresentation: RiskPresentation,
 ): string {
   const sourceLabel = sourceTypeToKorean(input.sourceType);
   const symptomText = signals.extractedSymptoms.length > 0 ? signals.extractedSymptoms.join(", ") : "뚜렷한 증상 표현 없음";
   const foodText = signals.foodMentions.length > 0 ? signals.foodMentions.join(", ") : "음식 언급 없음";
 
-  return `${sourceLabel}에서 ${symptomText}을 확인했고, 음식 관련 언급은 ${foodText}입니다. 현재 기록 기준 위험도는 ${riskLevel}입니다.`;
+  return `${riskPresentation.riskBadge}: ${sourceLabel}에서 ${symptomText}을 확인했고, 음식 관련 언급은 ${foodText}입니다. 현재 기록 기준 위험도는 ${riskLevel}이며, ${riskPresentation.riskLabel} 단계입니다.`;
 }
 
 function buildVetVisitSummary(
@@ -463,6 +479,7 @@ function buildVetVisitSummary(
   signals: ExtractedChatSignals,
   riskLevel: DailyRiskLevel,
   riskReasons: string[],
+  riskPresentation: RiskPresentation,
   timeline: string[],
 ): string {
   const profile = [
@@ -479,7 +496,7 @@ function buildVetVisitSummary(
     ? ` 보호자 메모: ${input.ownerMemo.trim()}`
     : "";
 
-  return `${profile}입니다. 보호자가 제공한 ${sourceLabel} 내용을 기준으로 ${symptoms} 표현이 확인되었습니다. 식욕 상태: ${signals.appetiteStatus}, 변 상태: ${signals.stoolStatus}, 구토: ${signals.vomitingStatus}, 활동량: ${signals.energyStatus}. 시간 관련 내용: ${timelineText}. 음식 관련 언급: ${foods}. 기록 기준 위험도는 ${riskLevel}이며, 판단 이유는 ${reasons}${memo} 이 내용은 보호자 제공 텍스트 기반 요약이므로 정확한 판단은 수의사 상담이 필요합니다.`;
+  return `${riskPresentation.riskBadge} ${riskPresentation.riskLabel}. ${profile}입니다. 보호자가 제공한 ${sourceLabel} 내용을 기준으로 ${symptoms} 표현이 확인되었습니다. 식욕 상태: ${signals.appetiteStatus}, 변 상태: ${signals.stoolStatus}, 구토: ${signals.vomitingStatus}, 활동량: ${signals.energyStatus}. 시간 관련 내용: ${timelineText}. 음식 관련 언급: ${foods}. 기록 기준 위험도는 ${riskLevel}이며, 판단 이유는 ${reasons} 바로 할 일: ${riskPresentation.immediateAction}${memo} 이 내용은 보호자 제공 텍스트 기반 요약이므로 정확한 판단은 수의사 상담이 필요합니다.`;
 }
 
 function buildQuestionsForVet(signals: ExtractedChatSignals, riskLevel: DailyRiskLevel): string[] {

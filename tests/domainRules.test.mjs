@@ -28,6 +28,16 @@ test("food safety rules classify high-risk and common foods", () => {
   assert.equal(checkFoodSafety({ foodName: "처음 보는 재료" }).riskLevel, "unknown");
 });
 
+test("food safety rules include visible risk presentation for dangerous food", () => {
+  const result = checkFoodSafety({ foodName: "샤인머스캣 포도", dogWeightKg: 11 });
+
+  assert.equal(result.riskLevel, "danger");
+  assert.match(result.riskPresentation.riskBadge, /🚨/);
+  assert.match(result.riskPresentation.riskLabel, /위험/);
+  assert.match(result.riskPresentation.immediateAction, /동물병원/);
+  assert.equal(result.riskPresentation.severityOrder, 4);
+});
+
 test("daily status rules elevate urgent and contextual consultation cases", () => {
   assert.equal(
     analyzeDailyStatus({
@@ -73,6 +83,24 @@ test("daily status rules elevate urgent and contextual consultation cases", () =
       energy: "normal",
     }).riskLevel,
     "watch",
+  );
+});
+
+test("daily status urgent result includes visible risk presentation", () => {
+  const analysis = analyzeDailyStatus({
+    dogName: "몽이",
+    weightKg: 11,
+    ownerConcern: "샤인머스캣 한 알을 30분 전에 먹었어요. 아직 증상은 없어요.",
+  });
+
+  assert.equal(analysis.riskLevel, "urgent");
+  assert.match(analysis.riskPresentation.riskBadge, /🚨/);
+  assert.match(analysis.riskPresentation.riskLabel, /빠른/);
+  assert.match(analysis.riskPresentation.immediateAction, /동물병원/);
+  assert.ok(analysis.riskPresentation.doNow.length >= 3);
+  assert.ok(
+    analysis.riskPresentation.avoidActions.some((action) => action.includes("약")) ||
+      analysis.riskPresentation.avoidActions.some((action) => action.includes("토하게")),
   );
 });
 
@@ -134,6 +162,20 @@ test("daily status analysis elevates dangerous food mention in owner concern", (
   );
 });
 
+test("daily status normal result includes low severity risk presentation", () => {
+  const analysis = analyzeDailyStatus({
+    dogName: "몽이",
+    appetite: "normal",
+    stool: "normal",
+    vomiting: "none",
+    energy: "normal",
+  });
+
+  assert.equal(analysis.riskLevel, "normal");
+  assert.match(analysis.riskPresentation.riskBadge, /🟢/);
+  assert.equal(analysis.riskPresentation.severityOrder, 1);
+});
+
 test("daily care note combines analysis, care guidance, and vet summary", () => {
   const note = createDailyCareNote({
     dogName: "몽이",
@@ -161,11 +203,17 @@ test("daily care note handles incomplete concern with friendly guide", () => {
   assert.equal(note.dogName, "반려견");
   assert.ok(["watch", "vet_consult"].includes(note.riskLevel));
   assert.equal(typeof note.userFriendlyGuide, "string");
+  assert.match(note.userFriendlyGuide, /🟡|🟠|🚨/);
+  assert.equal(typeof note.riskPresentation, "object");
   assert.ok(note.missingInfoQuestions.length >= 3);
+  assert.ok(
+    note.nextAction.includes(note.riskPresentation.immediateAction) ||
+      /동물병원|관찰|기록/.test(note.nextAction),
+  );
   assert.equal(typeof note.vetConsultPreparation.vetVisitSummary, "string");
 
   const serialized = JSON.stringify(note);
-  assert.doesNotMatch(serialized, /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다/);
+  assert.doesNotMatch(serialized, /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|정상 괜찮습니다|완치/);
 });
 
 test("pet chat summary extracts symptoms and creates vet summary", () => {
@@ -206,6 +254,8 @@ test("pet chat summary elevates dangerous food mention to urgent", () => {
   });
 
   assert.equal(summary.riskLevel, "urgent");
+  assert.match(summary.riskPresentation.riskBadge, /🚨/);
+  assert.match(`${summary.analyzedTextSummary} ${summary.vetVisitSummary}`, /빠른 상담|위험 음식/);
   assert.ok(summary.foodMentions.some((food) => food.includes("샤인머스캣")));
   assert.match(summary.riskReasons.join(" "), /위험 음식|빠른 동물병원 상담 권장/);
 });

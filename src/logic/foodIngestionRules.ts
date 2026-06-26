@@ -1,4 +1,5 @@
 import { checkFoodSafety, type FoodRiskLevel } from "./foodRules.js";
+import type { RiskPresentation } from "./riskPresentationRules.js";
 import type {
   FoodIngestionEventInput,
   FoodIngestionRecordedSummary,
@@ -9,6 +10,7 @@ export interface FoodIngestionAnalysis {
   recordedSummary: FoodIngestionRecordedSummary;
   missingInfoQuestions: string[];
   immediateGuide: string[];
+  riskPresentation: RiskPresentation;
   vetSummary: string;
 }
 
@@ -25,7 +27,12 @@ export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodI
     riskLevel: foodSafety.riskLevel,
     recordedSummary,
     missingInfoQuestions: buildMissingInfoQuestions(input),
-    immediateGuide: buildImmediateGuide(foodSafety.riskLevel, recordedSummary),
+    immediateGuide: buildImmediateGuide(
+      foodSafety.riskLevel,
+      recordedSummary,
+      foodSafety.riskPresentation,
+    ),
+    riskPresentation: foodSafety.riskPresentation,
     vetSummary: buildVetSummary(recordedSummary, foodSafety.riskLevel),
   };
 }
@@ -63,12 +70,14 @@ export function buildMissingInfoQuestions(input: FoodIngestionEventInput): strin
 export function buildImmediateGuide(
   riskLevel: FoodRiskLevel,
   summary?: FoodIngestionRecordedSummary,
+  riskPresentation?: RiskPresentation,
 ): string[] {
   const symptomGuide = buildSymptomGuide(summary?.currentSymptoms ?? []);
 
   if (riskLevel === "danger") {
     return [
-      "빠른 동물병원 상담 권장: 음식 종류, 섭취량, 섭취 시간을 정리해 바로 문의하세요.",
+      riskPresentation?.immediateAction ??
+        "빠른 동물병원 상담 권장: 음식 종류, 섭취량, 섭취 시간을 정리해 바로 문의하세요.",
       "먹은 음식이나 포장지 사진이 있다면 병원 상담 시 함께 보여 주세요.",
       symptomGuide,
       "보호자 판단으로 임의로 약을 먹이거나 토하게 하지 마세요.",

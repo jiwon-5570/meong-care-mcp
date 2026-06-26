@@ -1,4 +1,5 @@
 import { checkFoodSafety } from "./foodRules.js";
+import { buildDailyRiskPresentation, type RiskPresentation } from "./riskPresentationRules.js";
 
 export type AppetiteStatus = "normal" | "less" | "none" | "increased" | "unknown";
 export type StoolStatus = "normal" | "soft" | "diarrhea" | "bloody" | "unknown";
@@ -46,6 +47,7 @@ export interface DailyStatusAnalysis {
   knownInfo: string[];
   missingInfoQuestions: string[];
   currentAssessment: string;
+  riskPresentation: RiskPresentation;
 }
 
 interface DangerousFoodSignal {
@@ -115,15 +117,17 @@ export function analyzeDailyStatus(input: DailyStatusInput): DailyStatusAnalysis
       "빠른 동물병원 상담 권장 신호가 포함되어 있습니다.",
       ...urgentReasons,
     ];
+    const mainSymptoms = buildMainSymptoms(normalized, dangerousFoodSignal, urgentReasons);
 
     return {
       dogName: normalized.dogName,
       riskLevel: "urgent",
       reasons,
-      mainSymptoms: buildMainSymptoms(normalized, dangerousFoodSignal, urgentReasons),
+      mainSymptoms,
       knownInfo,
       missingInfoQuestions,
       currentAssessment: buildCurrentAssessment("urgent"),
+      riskPresentation: buildDailyRiskPresentation("urgent", reasons, mainSymptoms),
     };
   }
 
@@ -135,15 +139,17 @@ export function analyzeDailyStatus(input: DailyStatusInput): DailyStatusAnalysis
       ...abnormalReasons,
       ...contextualReasons,
     ];
+    const mainSymptoms = buildMainSymptoms(normalized, dangerousFoodSignal, abnormalReasons);
 
     return {
       dogName: normalized.dogName,
       riskLevel: "vet_consult",
       reasons,
-      mainSymptoms: buildMainSymptoms(normalized, dangerousFoodSignal, abnormalReasons),
+      mainSymptoms,
       knownInfo,
       missingInfoQuestions,
       currentAssessment: buildCurrentAssessment("vet_consult"),
+      riskPresentation: buildDailyRiskPresentation("vet_consult", reasons, mainSymptoms),
     };
   }
 
@@ -151,26 +157,31 @@ export function analyzeDailyStatus(input: DailyStatusInput): DailyStatusAnalysis
     const reasons = abnormalReasons.length > 0
       ? abnormalReasons
       : ["구체적인 증상 정보가 부족해 보수적으로 관찰 단계로 분류했습니다."];
+    const mainSymptoms = buildMainSymptoms(normalized, dangerousFoodSignal, reasons);
 
     return {
       dogName: normalized.dogName,
       riskLevel: "watch",
       reasons,
-      mainSymptoms: buildMainSymptoms(normalized, dangerousFoodSignal, reasons),
+      mainSymptoms,
       knownInfo,
       missingInfoQuestions,
       currentAssessment: buildCurrentAssessment("watch"),
+      riskPresentation: buildDailyRiskPresentation("watch", reasons, mainSymptoms),
     };
   }
+
+  const reasons = ["식욕, 변, 구토, 활동량에 뚜렷한 이상 신호가 입력되지 않았습니다."];
 
   return {
     dogName: normalized.dogName,
     riskLevel: "normal",
-    reasons: ["식욕, 변, 구토, 활동량에 뚜렷한 이상 신호가 입력되지 않았습니다."],
+    reasons,
     mainSymptoms: [],
     knownInfo,
     missingInfoQuestions,
     currentAssessment: buildCurrentAssessment("normal"),
+    riskPresentation: buildDailyRiskPresentation("normal", reasons, []),
   };
 }
 

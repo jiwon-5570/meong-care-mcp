@@ -3,6 +3,7 @@ import type {
   PhotoObservationInput,
   PhotoType,
 } from "../types/photoRecord.js";
+import { buildDailyRiskPresentation } from "./riskPresentationRules.js";
 import type { DailyRiskLevel } from "./riskRules.js";
 
 interface SignRule {
@@ -42,6 +43,11 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
     riskLevel,
     todayCareActions: buildCareActions(input.photoType, signs, riskLevel),
     vetSummary: buildVetSummary(input, signs, riskLevel),
+    riskPresentation: buildDailyRiskPresentation(
+      riskLevel,
+      buildPhotoRiskReasons(input.photoType, signs, riskLevel),
+      signs,
+    ),
     photoLimitations:
       "사진 기록은 조명, 각도, 초점, 보호자 입력에 따라 달라질 수 있어 이미지 진단이 아닙니다. 실제 상태가 심해 보이거나 증상이 지속되면 수의사 상담을 권장합니다.",
     hospitalSearchGuide:
@@ -49,6 +55,29 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
         ? "위험도가 vet_consult 이상이면 find_nearby_animal_hospitals tool로 가까운 동물병원을 찾고 방문 전 전화 확인을 권장합니다."
         : undefined,
   };
+}
+
+function buildPhotoRiskReasons(
+  photoType: PhotoType,
+  signs: string[],
+  riskLevel: DailyRiskLevel,
+): string[] {
+  const target = photoType === "stool" ? "변 사진" : "피부 사진";
+  const signsText = signs.length > 0 ? signs.join(", ") : "뚜렷한 이상 징후 미입력";
+
+  if (riskLevel === "urgent") {
+    return [`${target} 기록에서 빠른 상담을 고려할 만한 징후가 있습니다: ${signsText}`];
+  }
+
+  if (riskLevel === "vet_consult") {
+    return [`${target} 기록에서 동물병원 상담을 고려할 만한 징후가 있습니다: ${signsText}`];
+  }
+
+  if (riskLevel === "watch") {
+    return [`${target} 기록에서 관찰이 필요한 징후가 있습니다: ${signsText}`];
+  }
+
+  return [`${target} 기록에서 현재 입력 기준 큰 이상 신호가 많지 않습니다.`];
 }
 
 function extractSigns(input: PhotoObservationInput): string[] {

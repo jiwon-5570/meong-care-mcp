@@ -1,4 +1,5 @@
 import type { FoodRiskLevel } from "../logic/foodRules.js";
+import type { RiskPresentation } from "../logic/riskPresentationRules.js";
 
 export interface FoodIngestionEventInput {
   dogName?: string;
@@ -32,6 +33,7 @@ export interface FoodIngestionEventResult {
   recordedSummary: FoodIngestionRecordedSummary;
   missingInfoQuestions: string[];
   immediateGuide: string[];
+  riskPresentation: RiskPresentation;
   vetSummary: string;
   safetyNotice: string;
 }

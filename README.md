@@ -26,6 +26,7 @@
 - 위험 음식 섭취 기록 및 병원 상담용 요약 생성
 - 오늘 상태 분석
 - 입력 정보가 부족한 상태에서도 임시 위험도, 확인 질문, 보호자 안내 생성
+- 위험 상황을 `riskBadge`, `riskLabel`, `immediateAction`, `doNow`, `avoidActions`, `warningSignsToWatch`로 구조화해 보호자가 바로 알아볼 수 있게 표시
 - 통합 일상 케어 노트 생성
 - 식단, 물 섭취, 산책, 휴식 관리 추천
 - 동물병원 상담용 증상 요약문 생성
@@ -62,6 +63,30 @@
 
 모든 tool은 PlayMCP 권장 metadata 규칙에 맞춰 `name`, `description`, `inputSchema`, `annotations`를 포함합니다.
 
+## 위험 상황이 바로 보이는 응답
+
+멍케어노트 MCP는 위험도를 단순 텍스트로만 표시하지 않고 `riskPresentation` 객체로 구조화해 제공합니다. 위험도 응답에는 다음 정보가 포함됩니다.
+
+- `riskBadge`: 보호자가 바로 알아볼 수 있는 짧은 표시
+- `riskLabel`: 위험도 라벨
+- `severityOrder`: 1부터 4까지의 심각도 순서
+- `urgencyTitle`: 현재 상황 요약
+- `immediateAction`: 바로 해야 할 행동
+- `doNow`: 지금 확인하거나 기록할 항목
+- `avoidActions`: 피해야 할 행동
+- `warningSignsToWatch`: 관찰할 위험 신호
+- `vetContactGuidance`: 동물병원 상담 안내
+
+표시 기준:
+
+- 🚨 빠른 상담 권장: 위험 음식 섭취 가능성, 혈변, 반복 구토, 호흡 이상, 심한 무기력, 식욕이 전혀 없는 상태
+- 🟠 상담 권장: 여러 이상 신호가 함께 있거나 증상이 지속되는 경우
+- 🟡 관찰 필요: 가벼운 이상 신호가 있거나 정보가 부족한 경우
+- 🟢 큰 이상 신호 적음: 현재 입력만으로 뚜렷한 이상 신호가 적은 경우
+- ❔ 정보 확인 필요: 음식 성분이나 상황 정보가 부족해 위험도를 명확히 보기 어려운 경우
+
+이 안내는 진단이나 처방이 아니며, 이상 증상이 심하거나 지속되면 수의사 상담을 권장합니다.
+
 ## 입력이 부족한 상태에서도 안내
 
 카카오톡 대화에서는 보호자가 모든 필드를 한 번에 말하지 않는 경우가 많습니다. 멍케어노트 MCP는 `analyze_daily_status`와 `create_daily_care_note`에서 필수 입력이 부족해도 요청을 실패시키지 않고 다음 정보를 반환합니다.
@@ -94,6 +119,7 @@
 - 몸무게
 - 위험도: `safe` | `caution` | `danger` | `unknown`
 - 보호자 행동 안내
+- 위험도 표시 구조 `riskPresentation`
 - 안전 문구
 
 위험 음식 예시:
@@ -138,6 +164,7 @@
 - 확인된 정보 `knownInfo`
 - 부족한 정보 질문 `missingInfoQuestions`
 - 현재 임시 판단 `currentAssessment`
+- 위험도 표시 구조 `riskPresentation`
 - 오늘 관리 권장사항
 - 안전 문구
 
@@ -164,6 +191,7 @@
 - 부족한 정보 질문
 - 현재 임시 판단
 - 카카오톡에서 읽기 쉬운 보호자 안내문
+- 위험도 표시 구조
 - 오늘 식단/간식/물/산책/휴식 관리
 - 관찰할 증상
 - 병원 상담용 요약
@@ -190,6 +218,7 @@
 - 산책 강도
 - 휴식 권장
 - 관찰할 증상
+- 위험도 표시 구조
 - 안전 문구
 
 ### `create_vet_visit_summary`
@@ -210,6 +239,7 @@
 - `foodOrSnackToday?: string[]`
 - `ownerConcern?: string`
 - `missingInfoQuestions?: string[]`
+- `riskLevel?: "normal" | "watch" | "vet_consult" | "urgent"`
 
 출력:
 
@@ -254,6 +284,7 @@
 - 음식 언급
 - 위험도
 - 판단 이유
+- 위험도 표시 구조
 - 부족한 정보 질문
 - 병원 상담용 요약문
 - 수의사에게 물어볼 질문
@@ -297,6 +328,17 @@
 - `imageBase64`는 전체 저장하지 않고 preview 또는 `[base64 omitted]`로만 저장합니다.
 - `ANTHROPIC_API_KEY`가 있으면 Anthropic API로 사진 관찰 보조를 시도하고 실패 시 룰 기반 fallback을 사용합니다.
 
+출력:
+
+- 사진 기록 ID
+- 관찰된 이상 징후
+- 위험도
+- 오늘 관리 행동
+- 병원 상담용 요약
+- 위험도 표시 구조
+- 사진 기록 한계 안내
+- 안전 문구
+
 ### `record_food_ingestion_event`
 
 위험할 수 있는 음식을 먹은 상황을 병원 상담용으로 구조화해 기록합니다.
@@ -321,6 +363,7 @@
 - 기록된 정보 요약
 - 부족한 정보 질문 목록
 - 즉시 확인해야 할 항목
+- 위험도 표시 구조
 - 병원 상담용 요약문
 - 안전 문구
 
@@ -344,6 +387,7 @@ meong-care-mcp/
 │  │  ├─ foodRules.ts
 │  │  ├─ hospitalRules.ts
 │  │  ├─ photoRules.ts
+│  │  ├─ riskPresentationRules.ts
 │  │  ├─ riskRules.ts
 │  │  └─ symptomRules.ts
 │  ├─ services/

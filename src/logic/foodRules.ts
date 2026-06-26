@@ -1,3 +1,5 @@
+import { buildFoodRiskPresentation, type RiskPresentation } from "./riskPresentationRules.js";
+
 export type FoodRiskLevel = "safe" | "caution" | "danger" | "unknown";
 
 export interface FoodSafetyInput {
@@ -12,6 +14,7 @@ export interface FoodSafetyResult {
   dogWeightKg: number | null;
   riskLevel: FoodRiskLevel;
   guardianActions: string[];
+  riskPresentation: RiskPresentation;
 }
 
 interface FoodRule {
@@ -241,6 +244,7 @@ function buildFoodSafetyResult(
     dogWeightKg: input.dogWeightKg ?? null,
     riskLevel,
     guardianActions,
+    riskPresentation: buildFoodRiskPresentation(riskLevel, input.foodName, guardianActions),
   };
 }
 

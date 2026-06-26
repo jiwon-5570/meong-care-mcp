@@ -1,4 +1,5 @@
 import type { DailyRiskLevel } from "./riskRules.js";
+import { buildDailyRiskPresentation, type RiskPresentation } from "./riskPresentationRules.js";
 
 export interface DailyCareInput {
   dogName: string;
@@ -17,6 +18,7 @@ export interface DailyCareRecommendation {
   walkIntensity: string;
   restRecommendation: string;
   symptomsToMonitor: string[];
+  riskPresentation?: RiskPresentation;
 }
 
 export interface VetVisitSummaryInput {
@@ -32,6 +34,7 @@ export interface VetVisitSummaryInput {
   foodOrSnackToday?: string[];
   ownerConcern?: string;
   missingInfoQuestions?: string[];
+  riskLevel?: DailyRiskLevel;
 }
 
 export interface VetVisitSummaryResult {
@@ -46,16 +49,19 @@ export interface VetVisitSummaryResult {
     energy: string;
   };
   questionsForVet: string[];
+  riskPresentation?: RiskPresentation;
 }
 
 export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendation {
   const symptomContext = getSymptomContext(input.mainSymptoms);
   const ageNote = buildAgeCareNote(input.ageYears);
+  const riskPresentation = buildDailyRiskPresentation(input.riskLevel, [], input.mainSymptoms);
 
   if (input.riskLevel === "urgent") {
     return {
       dogName: input.dogName,
       riskLevel: input.riskLevel,
+      riskPresentation,
       dietManagement:
         "새로운 음식과 간식은 중단하고, 먹은 음식과 증상 시작 시간을 정리해 빠른 동물병원 상담을 우선해 주세요.",
       snackRestriction: "제한 권장: 상담 전에는 간식이나 새로운 음식을 추가하지 마세요.",
@@ -80,6 +86,7 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
     return {
       dogName: input.dogName,
       riskLevel: input.riskLevel,
+      riskPresentation,
       dietManagement: buildDietManagementForConsult(symptomContext),
       snackRestriction: "제한 권장: 증상이 안정될 때까지 간식은 줄이거나 중단해 주세요.",
       waterCheck: buildWaterCheck(symptomContext, input.weightKg),
@@ -99,6 +106,7 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
     return {
       dogName: input.dogName,
       riskLevel: input.riskLevel,
+      riskPresentation,
       dietManagement: symptomContext.hasDigestiveSignal
         ? "오늘은 평소 먹던 사료를 중심으로 단순하게 관리하고, 소화에 부담될 수 있는 음식은 피해주세요."
         : "평소 식단은 유지하되 새로운 음식은 소량이라도 신중하게 주세요.",
@@ -121,6 +129,7 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
   return {
     dogName: input.dogName,
     riskLevel: input.riskLevel,
+    riskPresentation,
     dietManagement: "평소에 잘 맞던 사료와 식사 시간을 유지해 주세요.",
     snackRestriction: "과식하지 않는 범위에서 평소처럼 관리하고 간식 양을 확인해 주세요.",
     waterCheck: buildWaterCheck(symptomContext, input.weightKg),
@@ -168,6 +177,9 @@ export function createVetVisitSummary(input: VetVisitSummaryInput): VetVisitSumm
   }
 
   const missingInfoQuestions = input.missingInfoQuestions ?? [];
+  const riskPresentation = input.riskLevel !== undefined
+    ? buildDailyRiskPresentation(input.riskLevel, [], symptoms)
+    : undefined;
 
   return {
     vetVisitSummary: summaryParts.join("\n"),
@@ -182,6 +194,7 @@ export function createVetVisitSummary(input: VetVisitSummaryInput): VetVisitSumm
       "오늘 먹은 음식이나 간식이 현재 상태와 관련될 수 있는지 궁금합니다.",
       ...missingInfoQuestions.map((question) => `추가 확인 필요: ${question}`),
     ]),
+    ...(riskPresentation !== undefined ? { riskPresentation } : {}),
   };
 }
 
