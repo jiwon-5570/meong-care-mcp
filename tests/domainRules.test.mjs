@@ -474,6 +474,7 @@ test("photo observation rules classify stool and skin observations", () => {
   assert.equal(stoolPhoto.riskLevel, "watch");
   assertVetShareCardText(stoolPhoto.vetShareCard);
   assertKakaoActionText(stoolPhoto.kakaoActionText);
+  assertPhotoFollowUpGuide(stoolPhoto);
 
   assert.equal(
     analyzePhotoObservation({
@@ -485,6 +486,80 @@ test("photo observation rules classify stool and skin observations", () => {
     }).riskLevel,
     "vet_consult",
   );
+});
+
+test("stool photo observation includes next recording guidance", () => {
+  const result = analyzePhotoObservation({
+    dogName: "몽이",
+    photoType: "stool",
+    visualNotes: "묽은 변처럼 보이고 색은 갈색입니다.",
+    observedSigns: ["묽은 변"],
+    relatedSymptoms: ["식욕 감소"],
+    appetite: "less",
+    vomiting: "none",
+    energy: "normal",
+  });
+
+  assertPhotoFollowUpGuide(result);
+  assert.match(result.nextPhotoGuide.join(" "), /변|배변/);
+  assert.match(result.comparisonFocus.join(" "), /변 색 변화|묽기/);
+  assert.match(result.photoRecordUserMessage, /사진|관찰/);
+  assert.equal(typeof result.photoRetakeRecommended, "boolean");
+});
+
+test("poor quality skin observation recommends another record", () => {
+  const result = analyzePhotoObservation({
+    dogName: "몽이",
+    photoType: "skin",
+    visualNotes: "사진이 흐리고 어두워서 잘 안 보이지만 배 쪽에 붉은기가 있는 것 같아요.",
+    observedSigns: ["붉은기", "흐림"],
+    relatedSymptoms: ["가려움"],
+    appetite: "normal",
+    vomiting: "none",
+    energy: "normal",
+  });
+
+  assert.ok(["poor_quality", "needs_more_context"].includes(result.photoQuality.level));
+  assert.equal(result.photoRetakeRecommended, true);
+  assert.match(result.nextPhotoGuide.join(" "), /밝은 곳/);
+  assert.ok(result.comparisonFocus.includes("붉은기 범위"));
+});
+
+test("urgent stool observation keeps consultation and safety guidance", () => {
+  const result = analyzePhotoObservation({
+    dogName: "몽이",
+    photoType: "stool",
+    visualNotes: "피가 섞인 것처럼 붉은 변입니다.",
+    observedSigns: ["혈변 의심"],
+    relatedSymptoms: ["식욕 없음"],
+    appetite: "none",
+    vomiting: "none",
+    energy: "low",
+  });
+  const response = withSafetyMessage(result);
+
+  assert.equal(result.riskLevel, "urgent");
+  assert.match(result.riskPresentation.riskBadge, /🚨/);
+  assert.match(result.followUpObservationGuide.join(" "), /혈변|동물병원/);
+  assert.match(result.photoRecordUserMessage, /상담/);
+  assert.equal(response.safetyMessage, SAFETY_MESSAGE);
+});
+
+test("photo observation without text asks for context and omits raw base64", () => {
+  const result = analyzePhotoObservation({
+    dogName: "몽이",
+    photoType: "stool",
+    imageBase64: "dGVzdC1pbWFnZS1kYXRh",
+    appetite: "unknown",
+    vomiting: "unknown",
+    energy: "unknown",
+  });
+
+  assert.ok(["text_only", "needs_more_context"].includes(result.photoQuality.level));
+  assert.equal(result.photoRetakeRecommended, true);
+  assert.match(result.missingInfoQuestions.join(" "), /관찰|텍스트/);
+  assert.match(result.photoLimitations, /사진 원본을 분석하거나 진단하지 않/);
+  assert.doesNotMatch(JSON.stringify(result), /dGVzdC1pbWFnZS1kYXRh/);
 });
 
 test("hospital search matches region tokens and filters closed hospitals", () => {
@@ -581,6 +656,21 @@ function assertKakaoActionText(kakaoActionText) {
   assert.doesNotMatch(
     serialized,
     /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|정상 괜찮습니다|확실히 괜찮습니다|완치/,
+  );
+}
+
+function assertPhotoFollowUpGuide(result) {
+  assert.equal(typeof result.photoFollowUpGuide, "object");
+  assert.equal(typeof result.photoQuality, "object");
+  assert.equal(typeof result.photoQuality.level, "string");
+  assert.ok(Array.isArray(result.nextPhotoGuide));
+  assert.ok(Array.isArray(result.followUpObservationGuide));
+  assert.ok(Array.isArray(result.comparisonFocus));
+  assert.equal(typeof result.photoRetakeRecommended, "boolean");
+  assert.equal(typeof result.photoRecordUserMessage, "string");
+  assert.doesNotMatch(
+    JSON.stringify(result.photoFollowUpGuide),
+    /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|확실히 괜찮습니다|완치/,
   );
 }
 

@@ -400,7 +400,7 @@ function createMcpServer(): McpServer {
     {
       title: "Record Pet Photo Observation",
       description:
-        "Records guardian or host-Agent observation text with optional dogProfile context without inspecting or diagnosing the original photo in MeongCareNote MCP(멍케어노트 MCP).",
+        "Records stool or skin observation text, structures risk, vet summary, and next photo or observation guidance without diagnosing from the original image in MeongCareNote MCP(멍케어노트 MCP).",
       annotations: {
         title: "Record Pet Photo Observation",
         readOnlyHint: false,
@@ -424,15 +424,15 @@ function createMcpServer(): McpServer {
         visualNotes: z
           .string()
           .optional()
-          .describe("Objective visual observations written by the guardian or extracted by the host Agent."),
+          .describe("Observation text supplied by the guardian or host Agent; MCP does not inspect the image or perform OCR."),
         observedSigns: z
           .array(z.string())
           .optional()
-          .describe("Observed signs supplied as text by the guardian or host Agent."),
+          .describe("Observed signs supplied as text by the guardian or host Agent; MCP does not interpret image pixels."),
         relatedSymptoms: z
           .array(z.string())
           .optional()
-          .describe("Related symptoms supplied as text by the guardian or host Agent."),
+          .describe("Related symptoms supplied as text by the guardian or host Agent for record structuring only."),
         appetite: z.enum(["normal", "less", "none", "unknown"]).optional(),
         vomiting: z.enum(["none", "once", "multiple", "unknown"]).optional(),
         energy: z.enum(["normal", "low", "very_low", "unknown"]).optional(),

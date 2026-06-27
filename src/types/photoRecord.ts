@@ -1,5 +1,6 @@
 import type { DailyRiskLevel } from "../logic/riskRules.js";
 import type { KakaoActionText } from "../logic/kakaoActionTextRules.js";
+import type { PhotoFollowUpGuide, PhotoQuality } from "../logic/photoGuideRules.js";
 import type { RiskPresentation } from "../logic/riskPresentationRules.js";
 import type { VetShareCard } from "../logic/vetShareCardRules.js";
 import type { DogProfile, DogProfileUsage } from "./dogProfile.js";
@@ -33,6 +34,14 @@ export interface PhotoObservationAnalysis {
   vetShareCard: VetShareCard;
   kakaoActionText: KakaoActionText;
   dogProfileUsage: DogProfileUsage;
+  missingInfoQuestions: string[];
+  photoFollowUpGuide: PhotoFollowUpGuide;
+  photoQuality: PhotoQuality;
+  nextPhotoGuide: string[];
+  followUpObservationGuide: string[];
+  comparisonFocus: string[];
+  photoRetakeRecommended: boolean;
+  photoRecordUserMessage: string;
   photoLimitations: string;
   hospitalSearchGuide?: string;
 }

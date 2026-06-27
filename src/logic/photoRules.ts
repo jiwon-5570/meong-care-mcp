@@ -5,6 +5,7 @@ import type {
 } from "../types/photoRecord.js";
 import { mergeDogProfile } from "./dogProfileRules.js";
 import { buildKakaoActionText } from "./kakaoActionTextRules.js";
+import { buildPhotoFollowUpGuide, type PhotoFollowUpGuide } from "./photoGuideRules.js";
 import { buildDailyRiskPresentation } from "./riskPresentationRules.js";
 import { buildVetShareCard } from "./vetShareCardRules.js";
 import type { DailyRiskLevel } from "./riskRules.js";
@@ -45,36 +46,60 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
   const riskPresentation = buildDailyRiskPresentation(
     riskLevel,
     buildPhotoRiskReasons(merged.photoType, signs, riskLevel),
-    signs,
+    signs.map(toPhotoDisplaySign),
   );
   const missingInfoQuestions = buildPhotoMissingInfoQuestions(merged, signs);
+  const combinedObservedSigns = uniqueStrings([
+    ...(merged.observedSigns ?? []),
+    ...signs.map(toPhotoDisplaySign),
+  ]);
+  const photoFollowUpGuide = buildPhotoFollowUpGuide({
+    photoType: merged.photoType,
+    riskLevel,
+    observedSigns: combinedObservedSigns,
+    relatedSymptoms: merged.relatedSymptoms,
+    visualNotes: merged.visualNotes,
+    appetite: merged.appetite,
+    vomiting: merged.vomiting,
+    energy: merged.energy,
+    hasImageUrl: merged.imageUrl !== undefined && merged.imageUrl.trim().length > 0,
+    hasImageBase64: merged.imageBase64 !== undefined && merged.imageBase64.trim().length > 0,
+  });
   const vetShareCard = buildVetShareCard({
     source: "photo_observation",
     dogName: merged.dogName,
     riskLevel,
     riskPresentation,
-    symptoms: [...(merged.relatedSymptoms ?? []), ...signs],
-    observedSigns: signs,
+    symptoms: [...(merged.relatedSymptoms ?? []), ...combinedObservedSigns],
+    observedSigns: combinedObservedSigns,
     photoType: merged.photoType,
     appetite: merged.appetite,
     vomiting: merged.vomiting,
     energy: merged.energy,
-    ownerConcern: buildProfileAwareMemo(merged.visualNotes, merged.dogProfileUsage),
+    ownerConcern: buildPhotoVetMemo(
+      merged.visualNotes,
+      merged.dogProfileUsage,
+      photoFollowUpGuide,
+    ),
     missingInfoQuestions,
-    questionsForVet: buildPhotoQuestionsForVet(input.photoType, riskLevel),
+    questionsForVet: buildPhotoQuestionsForVet(merged.photoType, riskLevel),
   });
   const kakaoActionText = buildKakaoActionText({
     source: "photo_observation",
     dogName: merged.dogName,
     riskLevel,
     riskPresentation,
-    mainSymptoms: [...(merged.relatedSymptoms ?? []), ...(merged.observedSigns ?? []), ...signs],
-    observedSigns: [...(merged.observedSigns ?? []), ...signs],
+    mainSymptoms: [...(merged.relatedSymptoms ?? []), ...combinedObservedSigns],
+    observedSigns: combinedObservedSigns,
     knownInfo: buildProfileKnownInfo(merged.dogProfileUsage),
     ownerConcern: merged.visualNotes,
     missingInfoQuestions,
     vetShareCard,
     dogProfileUsage: merged.dogProfileUsage,
+    photoRecordUserMessage: photoFollowUpGuide.photoRecordUserMessage,
+    nextPhotoGuide: photoFollowUpGuide.nextPhotoGuide,
+    comparisonFocus: photoFollowUpGuide.comparisonFocus,
+    photoType: merged.photoType,
   });
 
   return {
@@ -86,8 +111,16 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
     vetShareCard,
     kakaoActionText,
     dogProfileUsage: merged.dogProfileUsage,
+    missingInfoQuestions,
+    photoFollowUpGuide,
+    photoQuality: photoFollowUpGuide.photoQuality,
+    nextPhotoGuide: photoFollowUpGuide.nextPhotoGuide,
+    followUpObservationGuide: photoFollowUpGuide.followUpObservationGuide,
+    comparisonFocus: photoFollowUpGuide.comparisonFocus,
+    photoRetakeRecommended: photoFollowUpGuide.photoRetakeRecommended,
+    photoRecordUserMessage: photoFollowUpGuide.photoRecordUserMessage,
     photoLimitations:
-      "MCP는 사진 원본을 분석하거나 진단하지 않습니다. 보호자 또는 호스트 AI가 제공한 관찰 텍스트를 기록하고 구조화하며, 실제 상태가 심해 보이거나 증상이 지속되면 수의사 상담을 권장합니다.",
+      "MCP는 사진 원본을 분석하거나 진단하지 않습니다. 보호자 또는 호스트 AI가 제공한 관찰 텍스트를 기록 품질과 상담 준비 관점에서 구조화하며, 실제 상태가 심해 보이거나 증상이 지속되면 수의사 상담을 권장합니다.",
     hospitalSearchGuide:
       riskLevel === "vet_consult" || riskLevel === "urgent"
         ? "위험도가 vet_consult 이상이면 find_nearby_animal_hospitals tool로 가까운 동물병원을 찾고 방문 전 전화 확인을 권장합니다."
@@ -101,13 +134,17 @@ function buildProfileKnownInfo(dogProfileUsage: DogProfileUsage): string[] {
     : [];
 }
 
-function buildProfileAwareMemo(
+function buildPhotoVetMemo(
   visualNotes: string | undefined,
   dogProfileUsage: DogProfileUsage,
+  photoFollowUpGuide: PhotoFollowUpGuide,
 ): string | undefined {
   const parts = [
     visualNotes,
     ...buildProfileKnownInfo(dogProfileUsage),
+    `사진 기록 품질: ${photoFollowUpGuide.photoQuality.level}`,
+    `다음 비교 포인트: ${photoFollowUpGuide.comparisonFocus.slice(0, 5).join(", ")}`,
+    "사진만으로 원인을 판단한 것이 아니라 관찰 텍스트 기반 요약입니다.",
   ].filter((value): value is string => value !== undefined && value.trim().length > 0);
 
   return parts.length > 0 ? parts.join(" / ") : undefined;
@@ -159,7 +196,9 @@ function buildPhotoRiskReasons(
   riskLevel: DailyRiskLevel,
 ): string[] {
   const target = photoType === "stool" ? "변 사진" : "피부 사진";
-  const signsText = signs.length > 0 ? signs.join(", ") : "뚜렷한 이상 징후 미입력";
+  const signsText = signs.length > 0
+    ? signs.map(toPhotoDisplaySign).join(", ")
+    : "뚜렷한 이상 징후 미입력";
 
   if (riskLevel === "urgent") {
     return [`${target} 기록에서 빠른 상담을 고려할 만한 징후가 있습니다: ${signsText}`];
@@ -308,7 +347,9 @@ function buildVetSummary(
 ): string {
   const dogName = input.dogName ?? "이름 미입력";
   const takenAt = input.takenAt ?? "촬영 시점 미입력";
-  const signsText = signs.length > 0 ? signs.join(", ") : "뚜렷한 이상 징후 미입력";
+  const signsText = signs.length > 0
+    ? signs.map(toPhotoDisplaySign).join(", ")
+    : "뚜렷한 이상 징후 미입력";
   const relatedSymptoms =
     input.relatedSymptoms !== undefined && input.relatedSymptoms.length > 0
       ? input.relatedSymptoms.join(", ")
@@ -329,6 +370,29 @@ function hasAny(values: string[], candidates: string[]): boolean {
   return candidates.some((candidate) => values.includes(candidate));
 }
 
+function toPhotoDisplaySign(sign: string): string {
+  const labels: Record<string, string> = {
+    normal_like: "평소와 비슷한 형태",
+    soft: "묽은 변",
+    diarrhea_like: "설사처럼 보이는 변",
+    blood_like: "피처럼 보이는 붉은 부분",
+    black_tarry_like: "검고 타르처럼 보이는 변",
+    mucus_like: "점액처럼 보이는 부분",
+    foreign_object_like: "이물질처럼 보이는 부분",
+    poor_quality: "사진 품질 설명 부족",
+    redness: "붉은기",
+    hair_loss: "털 빠짐",
+    scaling: "각질",
+    scab: "딱지",
+    wound: "상처",
+    discharge: "진물 또는 분비물",
+    swelling: "붓기",
+    lump: "혹처럼 보이는 변화",
+  };
+
+  return labels[sign] ?? sign;
+}
+
 function hasRelatedItching(relatedSymptoms: string[] | undefined): boolean {
   if (relatedSymptoms === undefined) {
     return false;
@@ -339,4 +403,14 @@ function hasRelatedItching(relatedSymptoms: string[] | undefined): boolean {
 
 function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    ),
+  );
 }

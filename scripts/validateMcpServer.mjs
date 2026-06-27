@@ -318,6 +318,13 @@ const toolCases = [
       assert(typeof payload.vetShareCard?.copyableText === "string", "record_pet_photo_observation should include vetShareCard.");
       assert(typeof payload.kakaoActionText?.familyShareText === "string", "record_pet_photo_observation should include kakaoActionText.");
       assert(payload.dogProfileUsage?.applied === true, "record_pet_photo_observation should apply dogProfile.");
+      assert(typeof payload.photoFollowUpGuide === "object", "record_pet_photo_observation should include photoFollowUpGuide.");
+      assert(typeof payload.photoQuality === "object", "record_pet_photo_observation should include photoQuality.");
+      assert(Array.isArray(payload.nextPhotoGuide), "record_pet_photo_observation should include nextPhotoGuide.");
+      assert(Array.isArray(payload.followUpObservationGuide), "record_pet_photo_observation should include followUpObservationGuide.");
+      assert(Array.isArray(payload.comparisonFocus), "record_pet_photo_observation should include comparisonFocus.");
+      assert(typeof payload.photoRetakeRecommended === "boolean", "record_pet_photo_observation should include photoRetakeRecommended.");
+      assert(typeof payload.photoRecordUserMessage === "string", "record_pet_photo_observation should include photoRecordUserMessage.");
     },
   },
   {
@@ -671,6 +678,45 @@ function validateToolPayload(toolName, payload) {
     assert(
       Array.isArray(payload.trendSummary.worseningSignals),
       `${toolName} trendSummary.worseningSignals must be array.`,
+    );
+  }
+
+  if (payload.photoFollowUpGuide !== undefined) {
+    assert(
+      typeof payload.photoFollowUpGuide === "object" && payload.photoFollowUpGuide !== null,
+      `${toolName} photoFollowUpGuide must be object.`,
+    );
+    assert(
+      typeof payload.photoFollowUpGuide.photoQuality === "object" &&
+        payload.photoFollowUpGuide.photoQuality !== null,
+      `${toolName} photoQuality is required.`,
+    );
+    assert(
+      Array.isArray(payload.photoFollowUpGuide.nextPhotoGuide),
+      `${toolName} nextPhotoGuide must be array.`,
+    );
+    assert(
+      Array.isArray(payload.photoFollowUpGuide.followUpObservationGuide),
+      `${toolName} followUpObservationGuide must be array.`,
+    );
+    assert(
+      Array.isArray(payload.photoFollowUpGuide.comparisonFocus),
+      `${toolName} comparisonFocus must be array.`,
+    );
+    assert(
+      typeof payload.photoFollowUpGuide.photoRetakeRecommended === "boolean",
+      `${toolName} photoRetakeRecommended must be boolean.`,
+    );
+    assert(
+      typeof payload.photoFollowUpGuide.photoRecordUserMessage === "string",
+      `${toolName} photoRecordUserMessage must be string.`,
+    );
+  }
+
+  if (payload.photoRecordUserMessage !== undefined) {
+    assert(
+      typeof payload.photoRecordUserMessage === "string",
+      `${toolName} photoRecordUserMessage must be string.`,
     );
   }
 

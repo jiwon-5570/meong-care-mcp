@@ -85,6 +85,21 @@
 
 최근 기록이 없으면 오늘 기록을 다음 비교를 위한 기준점으로 사용할 수 있다고 안내합니다. `recentRecords`는 `analyze_daily_status`, `create_daily_care_note`, `summarize_pet_chat_for_vet`에서 사용할 수 있습니다.
 
+## 사진 기록 품질 및 다음 관찰 가이드
+
+멍케어노트 MCP는 사진 원본을 직접 분석하지 않고, 보호자 또는 호스트 AI가 제공한 관찰 텍스트를 바탕으로 사진 기록 품질과 다음 관찰 포인트를 안내합니다. `record_pet_photo_observation` 응답에는 `photoFollowUpGuide`가 포함됩니다.
+
+포함 정보:
+
+- `photoQuality`: 관찰 텍스트가 충분한지, 추가 설명이나 재기록이 필요한지 안내
+- `nextPhotoGuide`: 다음에 같은 상태를 더 잘 기록하기 위한 촬영·기록 방법
+- `followUpObservationGuide`: 이후 확인할 증상과 행동
+- `comparisonFocus`: 다음 기록과 비교할 핵심 포인트
+- `photoRetakeRecommended`: 다시 기록하는 것이 좋은지 여부
+- `photoRecordUserMessage`: 카카오톡에서 바로 보여줄 5줄 이내 설명
+
+이 기능은 사진을 판독하거나 질병을 진단하는 기능이 아닙니다. 보호자 또는 호스트 AI가 제공한 `visualNotes`, `observedSigns`, `relatedSymptoms`를 병원 상담과 반복 관찰에 도움이 되도록 구조화합니다. `imageBase64` 원문 미저장 정책도 그대로 유지됩니다.
+
 ## MCP Tool 목록
 
 | Tool | 역할 |
@@ -430,6 +445,12 @@
 - 병원 상담용 요약
 - 위험도 표시 구조
 - 병원 공유용 요약 카드 `vetShareCard`
+- 사진 기록 품질 `photoQuality`
+- 다음 촬영·기록 방법 `nextPhotoGuide`
+- 후속 관찰 항목 `followUpObservationGuide`
+- 다음 비교 포인트 `comparisonFocus`
+- 재기록 권장 여부 `photoRetakeRecommended`
+- 카카오톡용 사진 기록 설명 `photoRecordUserMessage`
 - 사진 기록 한계 안내
 - 안전 문구
 
@@ -483,6 +504,7 @@ meong-care-mcp/
 │  │  ├─ foodRules.ts
 │  │  ├─ hospitalRules.ts
 │  │  ├─ kakaoActionTextRules.ts
+│  │  ├─ photoGuideRules.ts
 │  │  ├─ photoRules.ts
 │  │  ├─ riskPresentationRules.ts
 │  │  ├─ riskRules.ts

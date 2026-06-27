@@ -32,6 +32,10 @@ export interface KakaoActionTextInput {
   vetShareCard?: VetShareCard;
   dogProfileUsage?: DogProfileUsage;
   trendSummary?: TrendSummary;
+  photoRecordUserMessage?: string;
+  nextPhotoGuide?: string[];
+  comparisonFocus?: string[];
+  photoType?: "stool" | "skin";
 }
 
 export interface KakaoActionText {
@@ -84,16 +88,18 @@ export function buildKakaoActionText(input: KakaoActionTextInput): KakaoActionTe
 
   return {
     chatFirstReply: sanitizeGeneratedText(
-      buildChatFirstReply(
-        dogName,
-        sourceLabel,
-        riskText,
-        focusText,
-        missingInfoQuestions,
-        input.familyContext,
-        input.dogProfileUsage,
-        input.trendSummary,
-      ),
+      input.source === "photo_observation" && cleanText(input.photoRecordUserMessage) !== undefined
+        ? buildPhotoChatFirstReply(riskText, input.photoRecordUserMessage)
+        : buildChatFirstReply(
+          dogName,
+          sourceLabel,
+          riskText,
+          focusText,
+          missingInfoQuestions,
+          input.familyContext,
+          input.dogProfileUsage,
+          input.trendSummary,
+        ),
     ),
     familyShareText: sanitizeGeneratedText(
       buildFamilyShareText(
@@ -104,6 +110,9 @@ export function buildKakaoActionText(input: KakaoActionTextInput): KakaoActionTe
         missingInfoQuestions,
         input.familyContext,
         input.trendSummary,
+        input.source,
+        input.nextPhotoGuide,
+        input.comparisonFocus,
       ),
     ),
     vetCallScript: sanitizeGeneratedText(
@@ -115,10 +124,19 @@ export function buildKakaoActionText(input: KakaoActionTextInput): KakaoActionTe
         dogName,
         missingInfoQuestions,
         input.dogProfileUsage,
+        input.photoType,
       ),
     ),
     whyThisRisk: buildWhyThisRisk(input, riskText, symptoms).map(sanitizeGeneratedText),
   };
+}
+
+function buildPhotoChatFirstReply(
+  riskText: RiskText,
+  photoRecordUserMessage: string | undefined,
+): string {
+  const messageLines = cleanText(photoRecordUserMessage)?.split("\n") ?? [];
+  return [riskText.badge, ...messageLines].slice(0, 7).join("\n");
 }
 
 function buildChatFirstReply(
@@ -165,6 +183,9 @@ function buildFamilyShareText(
   missingInfoQuestions: string[],
   familyContext: string | null | undefined,
   trendSummary: TrendSummary | undefined,
+  source: KakaoActionSource,
+  nextPhotoGuide: string[] | undefined,
+  comparisonFocus: string[] | undefined,
 ): string {
   const context = cleanText(familyContext);
   const title = context !== undefined
@@ -176,6 +197,16 @@ function buildFamilyShareText(
 
   if (trendSummary?.comparedWithRecentRecords === true) {
     bullets.push(`- 최근 기록 비교: ${truncate(trendSummary.trendRiskReason, 90)}`);
+  }
+
+  if (source === "photo_observation") {
+    const focus = uniqueStrings(comparisonFocus ?? []).slice(0, 2).join(", ");
+    const guide = cleanText(nextPhotoGuide?.[0]);
+    bullets.push(
+      focus.length > 0
+        ? `- 다음에 같은 조건으로 다시 기록하며 ${focus} 항목을 비교하면 도움이 됩니다.`
+        : `- ${guide ?? "다음에 같은 조건으로 다시 기록하면 변화 비교에 도움이 됩니다."}`,
+    );
   }
 
   bullets.push(`- 현재 단계: ${riskText.label}`);
@@ -236,6 +267,7 @@ function buildNextInputExample(
   dogName: string,
   missingInfoQuestions: string[],
   dogProfileUsage: DogProfileUsage | undefined,
+  photoType: "stool" | "skin" | undefined,
 ): string {
   const missingHint = missingInfoQuestions.length > 0
     ? ` 추가로 확인할 내용: ${truncate(missingInfoQuestions[0], 90)}`
@@ -248,7 +280,10 @@ function buildNextInputExample(
   }
 
   if (source === "photo_observation") {
-    return `다음에는 ${dogProfileUsage?.applied === true ? "프로필 정보를 반복하지 않고 " : ""}이렇게 알려주세요: ${dogName} 사진 관찰 기록, 갈색의 묽은 변 1회, 식욕 감소, 구토 없음, 활동량은 평소와 같아요.${missingHint}`;
+    const example = photoType === "skin"
+      ? `${dogName} 피부 사진 기록, 오늘 저녁, 배 쪽 붉은기 범위는 동전 크기, 털 빠짐 있음, 진물 없음, 긁기 증가`
+      : `${dogName} 변 사진 기록, 오늘 저녁, 묽은 변 1회, 색은 갈색, 점액 없음, 구토 없음, 활동량 보통`;
+    return `다음에는 ${dogProfileUsage?.applied === true ? "프로필 정보를 반복하지 않고 " : ""}이렇게 알려주세요: ${example}.${missingHint}`;
   }
 
   return `다음에는 ${dogProfileUsage?.applied === true ? "프로필 정보를 반복하지 않고 " : ""}이렇게 알려주세요: ${dogName} 오늘 기록, 밥은 평소의 절반, 묽은 변 1회, 구토 없음, 활동량은 낮고 증상은 오늘 아침부터예요.${missingHint}`;
