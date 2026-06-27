@@ -9,6 +9,7 @@ import { z } from "zod";
 import { summarizePetChatForVet } from "./logic/chatSummaryRules.js";
 import { createDailyCareNote } from "./logic/dailyCareNoteRules.js";
 import { checkFoodSafety } from "./logic/foodRules.js";
+import { buildKakaoActionText } from "./logic/kakaoActionTextRules.js";
 import {
   analyzeDailyStatus,
   type DailyRiskLevel,
@@ -157,6 +158,16 @@ function createMcpServer(): McpServer {
         missingInfoQuestions: analysis.missingInfoQuestions,
         currentAssessment: analysis.currentAssessment,
         riskPresentation: analysis.riskPresentation,
+        kakaoActionText: buildKakaoActionText({
+          source: "daily_status",
+          dogName: analysis.dogName,
+          riskLevel: analysis.riskLevel,
+          riskPresentation: analysis.riskPresentation,
+          mainSymptoms: analysis.mainSymptoms,
+          knownInfo: analysis.knownInfo,
+          missingInfoQuestions: analysis.missingInfoQuestions,
+          ownerConcern: input.ownerConcern,
+        }),
         todayCareRecommendations: [
           care.dietManagement,
           care.snackRestriction,

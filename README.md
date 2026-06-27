@@ -28,6 +28,7 @@
 - 입력 정보가 부족한 상태에서도 임시 위험도, 확인 질문, 보호자 안내 생성
 - 위험 상황을 `riskBadge`, `riskLabel`, `immediateAction`, `doNow`, `avoidActions`, `warningSignsToWatch`로 구조화해 보호자가 바로 알아볼 수 있게 표시
 - 병원 접수/상담 시 그대로 복사해 보여줄 수 있는 `vetShareCard.copyableText` 생성
+- 카카오톡 첫 답변, 가족 공유문, 병원 전화 문장, 다음 입력 예시를 묶은 `kakaoActionText` 생성
 - 통합 일상 케어 노트 생성
 - 식단, 물 섭취, 산책, 휴식 관리 추천
 - 동물병원 상담용 증상 요약문 생성
@@ -114,6 +115,37 @@
 - 진단/처방이 아니라는 안전 고지
 
 `vetShareCard`는 `create_vet_visit_summary`, `create_daily_care_note`, `record_food_ingestion_event`, `summarize_pet_chat_for_vet`, `record_pet_photo_observation` 응답에서 사용할 수 있습니다. 사진 관련 요약은 이미지 진단 결과가 아니라 보호자 또는 호스트 AI가 제공한 관찰 텍스트를 정리한 보조 정보입니다.
+
+## 카카오톡 최적화 출력
+
+멍케어노트 MCP는 실사용자가 카카오톡에서 바로 이해하고 공유할 수 있도록 주요 응답에 `kakaoActionText`를 포함합니다. 위험도 판단은 기존 `riskPresentation`을 재사용하고, 문장만 사용 목적에 맞게 재구성합니다.
+
+포함 필드:
+
+- `chatFirstReply`: 사용자가 가장 먼저 볼 4~7줄의 자연스러운 안내
+- `familyShareText`: 가족방에 그대로 공유할 수 있는 행동 중심 요약
+- `vetCallScript`: 동물병원에 전화할 때 읽을 수 있는 2~4문장
+- `nextInputExample`: 다음 상태 기록을 쉽게 이어가기 위한 카카오톡 입력 예시
+- `whyThisRisk`: 현재 위험도 판단에 사용한 기록 근거
+
+적용 tool:
+
+- `analyze_daily_status`
+- `create_daily_care_note`
+- `summarize_pet_chat_for_vet`
+- `record_food_ingestion_event`
+- `record_pet_photo_observation`
+
+예시:
+
+```text
+🟠 상담 권장
+몽이의 오늘 케어 기록을 정리했어요.
+주요 기록: 식욕 감소, 묽은 변
+바로 할 일: 식사, 배변, 구토, 활동량 기록을 정리해 동물병원 상담을 준비해 주세요.
+```
+
+`kakaoActionText` 역시 진단이나 처방을 제공하지 않으며 모든 tool 응답의 기존 `safetyMessage`를 유지합니다.
 
 ## 입력이 부족한 상태에서도 안내
 
@@ -421,6 +453,7 @@ meong-care-mcp/
 │  │  ├─ foodIngestionRules.ts
 │  │  ├─ foodRules.ts
 │  │  ├─ hospitalRules.ts
+│  │  ├─ kakaoActionTextRules.ts
 │  │  ├─ photoRules.ts
 │  │  ├─ riskPresentationRules.ts
 │  │  ├─ riskRules.ts

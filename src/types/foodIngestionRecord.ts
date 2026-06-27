@@ -1,4 +1,5 @@
 import type { FoodRiskLevel } from "../logic/foodRules.js";
+import type { KakaoActionText } from "../logic/kakaoActionTextRules.js";
 import type { RiskPresentation } from "../logic/riskPresentationRules.js";
 import type { VetShareCard } from "../logic/vetShareCardRules.js";
 
@@ -37,6 +38,7 @@ export interface FoodIngestionEventResult {
   riskPresentation: RiskPresentation;
   vetSummary: string;
   vetShareCard: VetShareCard;
+  kakaoActionText: KakaoActionText;
   safetyNotice: string;
 }
 

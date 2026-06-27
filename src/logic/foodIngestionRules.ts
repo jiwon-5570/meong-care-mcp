@@ -1,4 +1,5 @@
 import { checkFoodSafety, type FoodRiskLevel } from "./foodRules.js";
+import { buildKakaoActionText, type KakaoActionText } from "./kakaoActionTextRules.js";
 import type { RiskPresentation } from "./riskPresentationRules.js";
 import { buildVetShareCard, type VetShareCard } from "./vetShareCardRules.js";
 import type {
@@ -14,6 +15,7 @@ export interface FoodIngestionAnalysis {
   riskPresentation: RiskPresentation;
   vetSummary: string;
   vetShareCard: VetShareCard;
+  kakaoActionText: KakaoActionText;
 }
 
 export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodIngestionAnalysis {
@@ -44,6 +46,19 @@ export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodI
     missingInfoQuestions,
     questionsForVet: buildFoodIngestionQuestionsForVet(foodSafety.riskLevel),
   });
+  const kakaoActionText = buildKakaoActionText({
+    source: "food_ingestion",
+    dogName: recordedSummary.dogName,
+    riskLevel: foodSafety.riskLevel,
+    riskPresentation: foodSafety.riskPresentation,
+    foodName: buildFoodLabel(recordedSummary.foodName, recordedSummary.foodDetail),
+    eatenAmount: recordedSummary.amount,
+    eatenAt: recordedSummary.eatenAt,
+    currentSymptoms: recordedSummary.currentSymptoms,
+    missingInfoQuestions,
+    ownerConcern: recordedSummary.ownerMemo,
+    vetShareCard,
+  });
 
   return {
     riskLevel: foodSafety.riskLevel,
@@ -53,6 +68,7 @@ export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodI
     riskPresentation: foodSafety.riskPresentation,
     vetSummary: buildVetSummary(recordedSummary, foodSafety.riskLevel),
     vetShareCard,
+    kakaoActionText,
   };
 }
 

@@ -23,6 +23,13 @@ const BANNED_PHRASES = [
 ];
 const EXPECTED_SAFETY_MESSAGE_PART = "진단이나 처방이 아니며";
 const MOJIBAKE_HINTS = ["\u5360", "\u7b4c", "\u7670", "\ufffd", "\uf9ce", "\u8e42", "\u8adb", "\u6e72"];
+const KAKAO_ACTION_REQUIRED_TOOLS = new Set([
+  "analyze_daily_status",
+  "create_daily_care_note",
+  "summarize_pet_chat_for_vet",
+  "record_food_ingestion_event",
+  "record_pet_photo_observation",
+]);
 
 const photoRecordsPath = path.join(tmpdir(), `meong-photo-records-${Date.now()}.json`);
 const foodRecordsPath = path.join(tmpdir(), `meong-food-records-${Date.now()}.json`);
@@ -61,6 +68,7 @@ const toolCases = [
     },
     assert: (payload) => {
       assert(["watch", "vet_consult"].includes(payload.riskLevel), "analyze_daily_status returned unexpected riskLevel.");
+      assert(typeof payload.kakaoActionText?.chatFirstReply === "string", "analyze_daily_status should include kakaoActionText.");
     },
   },
   {
@@ -141,6 +149,7 @@ const toolCases = [
       assert(payload.riskLevel === "vet_consult", "create_daily_care_note should classify persistent symptoms as vet_consult.");
       assert(typeof payload.nextAction === "string", "create_daily_care_note should include nextAction.");
       assert(typeof payload.vetConsultPreparation?.vetVisitSummary === "string", "create_daily_care_note should include vet summary.");
+      assert(typeof payload.kakaoActionText?.familyShareText === "string", "create_daily_care_note should include kakaoActionText.");
     },
   },
   {
@@ -215,6 +224,7 @@ const toolCases = [
       assert(typeof payload.vetShareCard?.copyableText === "string", "summarize_pet_chat_for_vet should include vetShareCard.");
       assert(typeof payload.privacyNotice === "string", "summarize_pet_chat_for_vet should include privacyNotice.");
       assert(typeof payload.riskPresentation?.riskBadge === "string", "summarize_pet_chat_for_vet should include riskPresentation.");
+      assert(typeof payload.kakaoActionText?.vetCallScript === "string", "summarize_pet_chat_for_vet should include kakaoActionText.");
       assert(
         ["watch", "vet_consult"].includes(payload.riskLevel),
         "summarize_pet_chat_for_vet should classify demo chat as watch or vet_consult.",
@@ -263,6 +273,7 @@ const toolCases = [
       assert(typeof payload.photoRecordId === "string", "record_pet_photo_observation should include photoRecordId.");
       assert(typeof payload.riskPresentation?.riskBadge === "string", "record_pet_photo_observation should include riskPresentation.");
       assert(typeof payload.vetShareCard?.copyableText === "string", "record_pet_photo_observation should include vetShareCard.");
+      assert(typeof payload.kakaoActionText?.familyShareText === "string", "record_pet_photo_observation should include kakaoActionText.");
     },
   },
   {
@@ -283,6 +294,11 @@ const toolCases = [
         "record_food_ingestion_event danger should include urgent visual badge.",
       );
       assert(typeof payload.vetShareCard?.copyableText === "string", "record_food_ingestion_event should include vetShareCard.");
+      assert(typeof payload.kakaoActionText?.vetCallScript === "string", "record_food_ingestion_event should include kakaoActionText.");
+      assert(
+        /동물병원|상담/.test(`${payload.kakaoActionText.chatFirstReply} ${payload.kakaoActionText.vetCallScript}`),
+        "record_food_ingestion_event kakaoActionText should include vet consultation wording.",
+      );
       assert(
         JSON.stringify(payload).includes("빠른 동물병원 상담 권장"),
         "record_food_ingestion_event should include fast vet consultation guidance for danger.",
@@ -512,6 +528,10 @@ function validateToolPayload(toolName, payload) {
   assert(typeof payload === "object" && payload !== null, `${toolName} payload must be object.`);
   assert(typeof payload.safetyMessage === "string" && payload.safetyMessage.length > 0, `${toolName} must include safetyMessage.`);
 
+  if (KAKAO_ACTION_REQUIRED_TOOLS.has(toolName)) {
+    assert(payload.kakaoActionText !== undefined, `${toolName} must include kakaoActionText.`);
+  }
+
   const serialized = JSON.stringify(payload);
   assert(
     payload.safetyMessage.includes(EXPECTED_SAFETY_MESSAGE_PART),
@@ -524,6 +544,41 @@ function validateToolPayload(toolName, payload) {
 
   for (const phrase of BANNED_PHRASES) {
     assert(!serialized.includes(phrase), `${toolName} contains banned medical phrase: ${phrase}`);
+  }
+
+  if (payload.kakaoActionText !== undefined) {
+    assert(
+      typeof payload.kakaoActionText === "object" && payload.kakaoActionText !== null,
+      `${toolName} kakaoActionText must be object.`,
+    );
+    assert(
+      typeof payload.kakaoActionText.chatFirstReply === "string" &&
+        payload.kakaoActionText.chatFirstReply.length > 0,
+      `${toolName} kakaoActionText.chatFirstReply is required.`,
+    );
+    assert(
+      typeof payload.kakaoActionText.familyShareText === "string" &&
+        payload.kakaoActionText.familyShareText.length > 0,
+      `${toolName} kakaoActionText.familyShareText is required.`,
+    );
+    assert(
+      typeof payload.kakaoActionText.vetCallScript === "string" &&
+        payload.kakaoActionText.vetCallScript.length > 0,
+      `${toolName} kakaoActionText.vetCallScript is required.`,
+    );
+    assert(
+      typeof payload.kakaoActionText.nextInputExample === "string" &&
+        payload.kakaoActionText.nextInputExample.length > 0,
+      `${toolName} kakaoActionText.nextInputExample is required.`,
+    );
+    assert(
+      Array.isArray(payload.kakaoActionText.whyThisRisk),
+      `${toolName} kakaoActionText.whyThisRisk must be array.`,
+    );
+    assert(
+      payload.kakaoActionText.whyThisRisk.length >= 2,
+      `${toolName} kakaoActionText.whyThisRisk should include at least two reasons.`,
+    );
   }
 
   if (typeof payload.riskLevel === "string") {

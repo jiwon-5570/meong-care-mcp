@@ -1,4 +1,5 @@
 import type { DailyRiskLevel } from "../logic/riskRules.js";
+import type { KakaoActionText } from "../logic/kakaoActionTextRules.js";
 import type { RiskPresentation } from "../logic/riskPresentationRules.js";
 import type { VetShareCard } from "../logic/vetShareCardRules.js";
 
@@ -28,6 +29,7 @@ export interface PhotoObservationAnalysis {
   vetSummary: string;
   riskPresentation: RiskPresentation;
   vetShareCard: VetShareCard;
+  kakaoActionText: KakaoActionText;
   photoLimitations: string;
   hospitalSearchGuide?: string;
 }

@@ -3,6 +3,7 @@ import type {
   PhotoObservationInput,
   PhotoType,
 } from "../types/photoRecord.js";
+import { buildKakaoActionText } from "./kakaoActionTextRules.js";
 import { buildDailyRiskPresentation } from "./riskPresentationRules.js";
 import { buildVetShareCard } from "./vetShareCardRules.js";
 import type { DailyRiskLevel } from "./riskRules.js";
@@ -43,6 +44,33 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
     buildPhotoRiskReasons(input.photoType, signs, riskLevel),
     signs,
   );
+  const missingInfoQuestions = buildPhotoMissingInfoQuestions(input, signs);
+  const vetShareCard = buildVetShareCard({
+    source: "photo_observation",
+    dogName: input.dogName,
+    riskLevel,
+    riskPresentation,
+    symptoms: [...(input.relatedSymptoms ?? []), ...signs],
+    observedSigns: signs,
+    photoType: input.photoType,
+    appetite: input.appetite,
+    vomiting: input.vomiting,
+    energy: input.energy,
+    ownerConcern: input.visualNotes,
+    missingInfoQuestions,
+    questionsForVet: buildPhotoQuestionsForVet(input.photoType, riskLevel),
+  });
+  const kakaoActionText = buildKakaoActionText({
+    source: "photo_observation",
+    dogName: input.dogName,
+    riskLevel,
+    riskPresentation,
+    mainSymptoms: [...(input.relatedSymptoms ?? []), ...(input.observedSigns ?? []), ...signs],
+    observedSigns: [...(input.observedSigns ?? []), ...signs],
+    ownerConcern: input.visualNotes,
+    missingInfoQuestions,
+    vetShareCard,
+  });
 
   return {
     observedAbnormalSigns: signs,
@@ -50,21 +78,8 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
     todayCareActions: buildCareActions(input.photoType, signs, riskLevel),
     vetSummary: buildVetSummary(input, signs, riskLevel),
     riskPresentation,
-    vetShareCard: buildVetShareCard({
-      source: "photo_observation",
-      dogName: input.dogName,
-      riskLevel,
-      riskPresentation,
-      symptoms: [...(input.relatedSymptoms ?? []), ...signs],
-      observedSigns: signs,
-      photoType: input.photoType,
-      appetite: input.appetite,
-      vomiting: input.vomiting,
-      energy: input.energy,
-      ownerConcern: input.visualNotes,
-      missingInfoQuestions: buildPhotoMissingInfoQuestions(input, signs),
-      questionsForVet: buildPhotoQuestionsForVet(input.photoType, riskLevel),
-    }),
+    vetShareCard,
+    kakaoActionText,
     photoLimitations:
       "MCP는 사진 원본을 분석하거나 진단하지 않습니다. 보호자 또는 호스트 AI가 제공한 관찰 텍스트를 기록하고 구조화하며, 실제 상태가 심해 보이거나 증상이 지속되면 수의사 상담을 권장합니다.",
     hospitalSearchGuide:

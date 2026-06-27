@@ -1,4 +1,5 @@
 import { checkFoodSafety } from "./foodRules.js";
+import { buildKakaoActionText, type KakaoActionText } from "./kakaoActionTextRules.js";
 import { buildDailyRiskPresentation, type RiskPresentation } from "./riskPresentationRules.js";
 import { buildVetShareCard, type VetShareCard } from "./vetShareCardRules.js";
 import type {
@@ -44,6 +45,7 @@ export interface PetChatSummaryResult {
   missingInfoQuestions: string[];
   vetVisitSummary: string;
   vetShareCard: VetShareCard;
+  kakaoActionText: KakaoActionText;
   questionsForVet: string[];
   privacyNotice: string;
 }
@@ -121,6 +123,20 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
     questionsForVet,
     privacyNote: PRIVACY_NOTICE,
   });
+  const kakaoActionText = buildKakaoActionText({
+    source: "chat_summary",
+    dogName: input.dogName,
+    riskLevel: risk.riskLevel,
+    riskPresentation,
+    mainSymptoms: signals.extractedSymptoms,
+    missingInfoQuestions,
+    foodName: signals.foodMentions.join(", "),
+    familyContext: input.sourceType === "screenshot_ocr"
+      ? "가족 대화 캡처에서 호스트 Agent가 읽어낸 텍스트 기반"
+      : "보호자가 제공한 대화 텍스트 기반",
+    ownerConcern: input.ownerMemo,
+    vetShareCard,
+  });
 
   return {
     sourceType: input.sourceType,
@@ -148,6 +164,7 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
       timeline,
     ),
     vetShareCard,
+    kakaoActionText,
     questionsForVet,
     privacyNotice: PRIVACY_NOTICE,
   };

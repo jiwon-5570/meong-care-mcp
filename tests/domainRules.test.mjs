@@ -192,6 +192,12 @@ test("daily care note combines analysis, care guidance, and vet summary", () => 
   assert.match(note.nextAction, /동물병원 상담 권장/);
   assert.match(note.vetConsultPreparation.vetVisitSummary, /몽이/);
   assert.ok(note.todayCare.symptomsToMonitor.length > 0);
+  assertKakaoActionText(note.kakaoActionText);
+  assert.match(note.kakaoActionText.chatFirstReply, /몽이/);
+  assert.match(note.kakaoActionText.familyShareText, /몽이/);
+  assert.match(note.kakaoActionText.vetCallScript, /안녕하세요/);
+  assert.match(note.kakaoActionText.nextInputExample, /다음/);
+  assert.ok(note.kakaoActionText.whyThisRisk.length >= 2);
 });
 
 test("daily care note handles incomplete concern with friendly guide", () => {
@@ -248,6 +254,11 @@ test("pet chat summary extracts symptoms and creates vet summary", () => {
   assertVetShareCardText(summary.vetShareCard);
   assert.match(summary.vetShareCard.copyableText, /캡처|가족 대화/);
   assert.match(summary.vetShareCard.copyableText, /식욕|변|구토/);
+  assertKakaoActionText(summary.kakaoActionText);
+  assert.match(summary.kakaoActionText.familyShareText, /가족|정리/);
+  assert.match(summary.kakaoActionText.vetCallScript, /밥|식욕/);
+  assert.match(summary.kakaoActionText.nextInputExample, /구토/);
+  assert.ok(summary.kakaoActionText.whyThisRisk.length >= 2);
 });
 
 test("pet chat summary elevates dangerous food mention to urgent", () => {
@@ -348,6 +359,7 @@ test("photo observation rules classify stool and skin observations", () => {
     });
   assert.equal(stoolPhoto.riskLevel, "watch");
   assertVetShareCardText(stoolPhoto.vetShareCard);
+  assertKakaoActionText(stoolPhoto.kakaoActionText);
 
   assert.equal(
     analyzePhotoObservation({
@@ -409,7 +421,33 @@ test("food ingestion event produces missing questions and danger summary", () =>
   assert.match(analysis.vetShareCard.copyableText, /한 알/);
   assert.match(analysis.vetShareCard.copyableText, /30분 전/);
   assert.match(analysis.vetShareCard.copyableText, /빠른|동물병원/);
+  assertKakaoActionText(analysis.kakaoActionText);
+  assert.match(analysis.kakaoActionText.chatFirstReply, /🚨|빠른/);
+  assert.match(analysis.kakaoActionText.vetCallScript, /샤인머스캣/);
+  assert.match(analysis.kakaoActionText.vetCallScript, /30분 전/);
+  assert.match(analysis.kakaoActionText.vetCallScript, /동물병원|상담/);
+  assert.match(analysis.kakaoActionText.whyThisRisk.join(" "), /위험 음식|포도|샤인머스캣/);
 });
+
+function assertKakaoActionText(kakaoActionText) {
+  assert.equal(typeof kakaoActionText, "object");
+  assert.equal(typeof kakaoActionText.chatFirstReply, "string");
+  assert.equal(typeof kakaoActionText.familyShareText, "string");
+  assert.equal(typeof kakaoActionText.vetCallScript, "string");
+  assert.equal(typeof kakaoActionText.nextInputExample, "string");
+  assert.ok(Array.isArray(kakaoActionText.whyThisRisk));
+  assert.ok(kakaoActionText.whyThisRisk.length >= 2);
+  assert.ok(kakaoActionText.chatFirstReply.split("\n").length >= 4);
+  assert.ok(kakaoActionText.chatFirstReply.split("\n").length <= 7);
+  assert.ok(kakaoActionText.familyShareText.split("\n").filter((line) => line.startsWith("- ")).length >= 2);
+  assert.ok(kakaoActionText.familyShareText.split("\n").filter((line) => line.startsWith("- ")).length <= 4);
+
+  const serialized = JSON.stringify(kakaoActionText);
+  assert.doesNotMatch(
+    serialized,
+    /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|정상 괜찮습니다|완치/,
+  );
+}
 
 function assertVetShareCardText(vetShareCard) {
   assert.equal(typeof vetShareCard, "object");
@@ -442,4 +480,8 @@ test("photo observation uses host-provided text without inspecting imageBase64",
   assert.equal(result.riskLevel, "watch");
   assert.ok(result.observedAbnormalSigns.includes("soft"));
   assert.match(result.photoLimitations, /사진 원본을 분석하거나 진단하지 않습니다/);
+  assertKakaoActionText(result.kakaoActionText);
+  assert.match(result.kakaoActionText.chatFirstReply, /사진|관찰/);
+  assert.match(result.kakaoActionText.familyShareText, /묽은 변/);
+  assert.match(result.kakaoActionText.vetCallScript, /관찰|기록/);
 });

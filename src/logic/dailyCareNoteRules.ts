@@ -16,6 +16,7 @@ import {
   type VomitingStatus,
 } from "./riskRules.js";
 import type { RiskPresentation } from "./riskPresentationRules.js";
+import { buildKakaoActionText, type KakaoActionText } from "./kakaoActionTextRules.js";
 
 export type DailyCareNoteInput = DailyStatusInput;
 
@@ -32,6 +33,7 @@ export interface DailyCareNoteResult {
   todayCare: DailyCareRecommendation;
   vetConsultPreparation: VetVisitSummaryResult;
   vetShareCard: VetShareCard;
+  kakaoActionText: KakaoActionText;
   nextAction: string;
 }
 
@@ -63,6 +65,17 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     missingInfoQuestions: analysis.missingInfoQuestions,
     riskLevel: analysis.riskLevel,
   });
+  const kakaoActionText = buildKakaoActionText({
+    source: "daily_care_note",
+    dogName: analysis.dogName,
+    riskLevel: analysis.riskLevel,
+    riskPresentation: analysis.riskPresentation,
+    mainSymptoms: symptomsForSummary,
+    knownInfo: analysis.knownInfo,
+    missingInfoQuestions: analysis.missingInfoQuestions,
+    ownerConcern: normalized.ownerConcern,
+    vetShareCard: vetConsultPreparation.vetShareCard,
+  });
 
   return {
     dogName: analysis.dogName,
@@ -83,6 +96,7 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     todayCare,
     vetConsultPreparation,
     vetShareCard: vetConsultPreparation.vetShareCard,
+    kakaoActionText,
     nextAction: buildNextAction(analysis.riskPresentation, analysis.missingInfoQuestions),
   };
 }

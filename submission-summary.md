@@ -45,6 +45,10 @@
 
 주요 병원 상담 관련 응답은 `vetShareCard`도 포함합니다. `vetShareCard.copyableText`는 반려견 정보, 위험도, 주요 증상, 증상 시작 시점, 식욕/변/구토/활동량 상태, 음식 섭취 기록, 추가 확인 정보, 수의사에게 물어볼 질문을 한 번에 정리합니다. 보호자는 당황한 상황에서도 수의사에게 필요한 정보를 빠뜨리지 않고 전달할 수 있습니다.
 
+멍케어노트 MCP는 분석 결과를 단순 JSON이나 긴 설명으로만 제공하지 않고, 카카오톡에서 바로 사용할 수 있는 `kakaoActionText`를 함께 제공합니다. 보호자는 `chatFirstReply`로 현재 상황을 빠르게 이해하고, `familyShareText`를 가족방에 공유하며, `vetCallScript`를 동물병원 전화 상담에 사용할 수 있습니다. 또한 `nextInputExample`과 `whyThisRisk`를 통해 다음 기록 방법과 위험도 판단 근거를 쉽게 이해할 수 있습니다.
+
+이 출력은 `analyze_daily_status`, `create_daily_care_note`, `summarize_pet_chat_for_vet`, `record_food_ingestion_event`, `record_pet_photo_observation`에 적용됩니다. 기존 `riskPresentation`, `vetShareCard`, `safetyMessage`를 유지하면서 카카오톡 실사용 흐름을 보강한 것이 차별점입니다.
+
 ## 6. 사용 데이터
 
 - 음식 위험도 규칙: MVP rule-based 로컬 규칙
