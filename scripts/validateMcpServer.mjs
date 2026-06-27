@@ -19,6 +19,7 @@ const BANNED_PHRASES = [
   "진단했습니다",
   "처방합니다",
   "정상 괜찮습니다",
+  "확실히 괜찮습니다",
   "완치",
 ];
 const EXPECTED_SAFETY_MESSAGE_PART = "진단이나 처방이 아니며";
@@ -155,6 +156,41 @@ const toolCases = [
   {
     name: "create_daily_care_note",
     args: {
+      dogProfile: {
+        dogName: "몽이",
+        ageYears: 6,
+        weightKg: 11,
+        usualFood: "닭고기 사료",
+        usualStool: "보통",
+      },
+      ownerConcern: "오늘도 밥을 거의 안 먹고 변이 묽어요.",
+      recentRecords: [
+        {
+          recordedAt: "어제",
+          dogName: "몽이",
+          riskLevel: "watch",
+          mainSymptoms: ["식욕 감소", "묽은 변"],
+          appetite: "less",
+          stool: "soft",
+          vomiting: "none",
+          energy: "normal",
+        },
+      ],
+    },
+    assert: (payload) => {
+      assert(payload.dogName === "몽이", "dogProfile should fill dogName.");
+      assert(payload.dogProfileUsage?.applied === true, "dogProfileUsage should be applied.");
+      assert(
+        payload.trendSummary?.comparedWithRecentRecords === true,
+        "trendSummary should compare recent records.",
+      );
+      assert(typeof payload.kakaoActionText?.chatFirstReply === "string", "kakaoActionText should remain.");
+      assert(typeof payload.vetShareCard?.copyableText === "string", "vetShareCard should remain.");
+    },
+  },
+  {
+    name: "create_daily_care_note",
+    args: {
       ownerConcern: "우리 강아지가 밥을 안 먹고 계속 누워 있어요.",
     },
     assert: (payload) => {
@@ -210,9 +246,11 @@ const toolCases = [
   {
     name: "summarize_pet_chat_for_vet",
     args: {
-      dogName: "몽이",
-      ageYears: 6,
-      weightKg: 11,
+      dogProfile: {
+        dogName: "몽이",
+        ageYears: 6,
+        weightKg: 11,
+      },
       sourceType: "screenshot_ocr",
       chatText:
         "엄마: 몽이가 아침부터 밥을 거의 안 먹어. 동생: 변이 좀 묽은 것 같아. 나: 구토는 있었어? 엄마: 구토는 안 했는데 계속 누워 있어. 동생: 어제 닭가슴살 조금 먹었대.",
@@ -225,6 +263,7 @@ const toolCases = [
       assert(typeof payload.privacyNotice === "string", "summarize_pet_chat_for_vet should include privacyNotice.");
       assert(typeof payload.riskPresentation?.riskBadge === "string", "summarize_pet_chat_for_vet should include riskPresentation.");
       assert(typeof payload.kakaoActionText?.vetCallScript === "string", "summarize_pet_chat_for_vet should include kakaoActionText.");
+      assert(payload.dogProfileUsage?.applied === true, "summarize_pet_chat_for_vet should apply dogProfile.");
       assert(
         ["watch", "vet_consult"].includes(payload.riskLevel),
         "summarize_pet_chat_for_vet should classify demo chat as watch or vet_consult.",
@@ -258,7 +297,11 @@ const toolCases = [
   {
     name: "record_pet_photo_observation",
     args: {
-      dogName: "몽이",
+      dogProfile: {
+        dogName: "몽이",
+        ageYears: 6,
+        weightKg: 11,
+      },
       photoType: "stool",
       imageBase64: "dGVzdC1pbWFnZS1kYXRh",
       takenAt: "오늘",
@@ -274,13 +317,16 @@ const toolCases = [
       assert(typeof payload.riskPresentation?.riskBadge === "string", "record_pet_photo_observation should include riskPresentation.");
       assert(typeof payload.vetShareCard?.copyableText === "string", "record_pet_photo_observation should include vetShareCard.");
       assert(typeof payload.kakaoActionText?.familyShareText === "string", "record_pet_photo_observation should include kakaoActionText.");
+      assert(payload.dogProfileUsage?.applied === true, "record_pet_photo_observation should apply dogProfile.");
     },
   },
   {
     name: "record_food_ingestion_event",
     args: {
-      dogName: "몽이",
-      weightKg: 11,
+      dogProfile: {
+        dogName: "몽이",
+        weightKg: 11,
+      },
       foodName: "포도",
       foodDetail: "샤인머스캣",
       amount: "한 알",
@@ -295,6 +341,7 @@ const toolCases = [
       );
       assert(typeof payload.vetShareCard?.copyableText === "string", "record_food_ingestion_event should include vetShareCard.");
       assert(typeof payload.kakaoActionText?.vetCallScript === "string", "record_food_ingestion_event should include kakaoActionText.");
+      assert(payload.dogProfileUsage?.applied === true, "record_food_ingestion_event should apply dogProfile.");
       assert(
         /동물병원|상담/.test(`${payload.kakaoActionText.chatFirstReply} ${payload.kakaoActionText.vetCallScript}`),
         "record_food_ingestion_event kakaoActionText should include vet consultation wording.",
@@ -578,6 +625,52 @@ function validateToolPayload(toolName, payload) {
     assert(
       payload.kakaoActionText.whyThisRisk.length >= 2,
       `${toolName} kakaoActionText.whyThisRisk should include at least two reasons.`,
+    );
+  }
+
+  if (payload.dogProfileUsage !== undefined) {
+    assert(
+      typeof payload.dogProfileUsage === "object" && payload.dogProfileUsage !== null,
+      `${toolName} dogProfileUsage must be object.`,
+    );
+    assert(
+      typeof payload.dogProfileUsage.applied === "boolean",
+      `${toolName} dogProfileUsage.applied must be boolean.`,
+    );
+    assert(
+      Array.isArray(payload.dogProfileUsage.appliedFields),
+      `${toolName} dogProfileUsage.appliedFields must be array.`,
+    );
+    assert(
+      Array.isArray(payload.dogProfileUsage.missingProfileFields),
+      `${toolName} dogProfileUsage.missingProfileFields must be array.`,
+    );
+    assert(
+      typeof payload.dogProfileUsage.profileSummary === "string",
+      `${toolName} dogProfileUsage.profileSummary must be string.`,
+    );
+  }
+
+  if (payload.trendSummary !== undefined) {
+    assert(
+      typeof payload.trendSummary === "object" && payload.trendSummary !== null,
+      `${toolName} trendSummary must be object.`,
+    );
+    assert(
+      typeof payload.trendSummary.comparedWithRecentRecords === "boolean",
+      `${toolName} trendSummary.comparedWithRecentRecords must be boolean.`,
+    );
+    assert(
+      typeof payload.trendSummary.userMessage === "string",
+      `${toolName} trendSummary.userMessage must be string.`,
+    );
+    assert(
+      Array.isArray(payload.trendSummary.repeatedSignals),
+      `${toolName} trendSummary.repeatedSignals must be array.`,
+    );
+    assert(
+      Array.isArray(payload.trendSummary.worseningSignals),
+      `${toolName} trendSummary.worseningSignals must be array.`,
     );
   }
 

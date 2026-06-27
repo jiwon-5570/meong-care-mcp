@@ -17,6 +17,8 @@ import {
 } from "./riskRules.js";
 import type { RiskPresentation } from "./riskPresentationRules.js";
 import { buildKakaoActionText, type KakaoActionText } from "./kakaoActionTextRules.js";
+import type { TrendSummary } from "./trendSummaryRules.js";
+import type { DogProfileUsage } from "../types/dogProfile.js";
 
 export type DailyCareNoteInput = DailyStatusInput;
 
@@ -29,6 +31,8 @@ export interface DailyCareNoteResult {
   missingInfoQuestions: string[];
   currentAssessment: string;
   riskPresentation: RiskPresentation;
+  dogProfileUsage: DogProfileUsage;
+  trendSummary: TrendSummary;
   userFriendlyGuide: string;
   todayCare: DailyCareRecommendation;
   vetConsultPreparation: VetVisitSummaryResult;
@@ -60,8 +64,13 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     stool: formatStoolStatus(normalized.stool),
     vomiting: formatVomitingStatus(normalized.vomiting),
     energy: formatEnergyStatus(normalized.energy),
-    foodOrSnackToday: normalized.foodOrSnackToday,
-    ownerConcern: normalized.ownerConcern,
+    foodOrSnackToday: normalized.foodOrSnackToday.filter(
+      (food) => !food.trim().startsWith("평소 사료:"),
+    ),
+    ownerConcern: buildProfileAwareOwnerConcern(
+      normalized.ownerConcern,
+      analysis.dogProfileUsage,
+    ),
     missingInfoQuestions: analysis.missingInfoQuestions,
     riskLevel: analysis.riskLevel,
   });
@@ -75,6 +84,8 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     missingInfoQuestions: analysis.missingInfoQuestions,
     ownerConcern: normalized.ownerConcern,
     vetShareCard: vetConsultPreparation.vetShareCard,
+    dogProfileUsage: analysis.dogProfileUsage,
+    trendSummary: analysis.trendSummary,
   });
 
   return {
@@ -86,12 +97,15 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     missingInfoQuestions: analysis.missingInfoQuestions,
     currentAssessment: analysis.currentAssessment,
     riskPresentation: analysis.riskPresentation,
+    dogProfileUsage: analysis.dogProfileUsage,
+    trendSummary: analysis.trendSummary,
     userFriendlyGuide: buildUserFriendlyGuide(
       analysis.dogName,
       analysis.riskPresentation,
       analysis.currentAssessment,
       symptomsForSummary,
       analysis.missingInfoQuestions,
+      analysis.trendSummary,
     ),
     todayCare,
     vetConsultPreparation,
@@ -118,6 +132,7 @@ function buildUserFriendlyGuide(
   currentAssessment: string,
   symptoms: string[],
   missingInfoQuestions: string[],
+  trendSummary: TrendSummary,
 ): string {
   const symptomText = symptoms.length > 0 ? symptoms.join(", ") : "뚜렷한 증상 정보 없음";
   const missingText = missingInfoQuestions.length > 0
@@ -130,9 +145,23 @@ function buildUserFriendlyGuide(
     `바로 할 일: ${riskPresentation.immediateAction}`,
     `주요 내용: ${symptomText}`,
     currentAssessment,
+    `최근 기록 비교: ${trendSummary.userMessage}`,
     missingText,
     "병원에 보여줄 내용은 vetShareCard.copyableText를 복사하면 됩니다.",
   ].join("\n");
+}
+
+function buildProfileAwareOwnerConcern(
+  ownerConcern: string | undefined,
+  dogProfileUsage: DogProfileUsage,
+): string | undefined {
+  const profileReference = dogProfileUsage.profileSummary !== "dogProfile이 제공되지 않았습니다."
+    ? `프로필 참고: ${dogProfileUsage.profileSummary}`
+    : undefined;
+  const parts = [ownerConcern?.trim(), profileReference]
+    .filter((value): value is string => value !== undefined && value.length > 0);
+
+  return parts.length > 0 ? parts.join(" / ") : undefined;
 }
 
 function formatAppetiteStatus(value: AppetiteStatus): string {

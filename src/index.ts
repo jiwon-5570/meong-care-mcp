@@ -35,6 +35,37 @@ app.use(express.json({ limit: "10mb" }));
 
 const transports: Record<string, StreamableHTTPServerTransport> = {};
 
+const dogProfileSchema = z.object({
+  dogName: z.string().optional(),
+  ageYears: z.number().min(0).optional(),
+  weightKg: z.number().positive().optional(),
+  breed: z.string().optional(),
+  sex: z.enum(["male", "female", "unknown"]).optional(),
+  neutered: z.boolean().optional(),
+  usualFood: z.string().optional(),
+  usualAppetite: z.string().optional(),
+  usualStool: z.string().optional(),
+  usualEnergy: z.string().optional(),
+  allergyOrSensitiveFoods: z.array(z.string()).optional(),
+  knownConditions: z.array(z.string()).optional(),
+  regularMedicationMemo: z.string().optional(),
+  vetClinicName: z.string().optional(),
+  vetPhone: z.string().optional(),
+  guardianMemo: z.string().optional(),
+}).optional();
+
+const recentDailyStatusRecordSchema = z.object({
+  recordedAt: z.string().optional(),
+  dogName: z.string().optional(),
+  riskLevel: z.enum(["normal", "watch", "vet_consult", "urgent"]).optional(),
+  mainSymptoms: z.array(z.string()).optional(),
+  appetite: z.string().optional(),
+  stool: z.string().optional(),
+  vomiting: z.string().optional(),
+  energy: z.string().optional(),
+  ownerConcern: z.string().optional(),
+});
+
 app.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({
     status: "ok",
@@ -129,7 +160,7 @@ function createMcpServer(): McpServer {
     {
       title: "Analyze Daily Dog Status",
       description:
-        "Classifies a dog's daily care risk level from appetite, stool, vomiting, and energy inputs in MeongCareNote MCP(멍케어노트 MCP).",
+        "Classifies a dog's daily care risk level and can apply dogProfile defaults or compare recentRecords in MeongCareNote MCP(멍케어노트 MCP).",
       annotations: {
         title: "Analyze Daily Dog Status",
         readOnlyHint: true,
@@ -158,6 +189,8 @@ function createMcpServer(): McpServer {
         missingInfoQuestions: analysis.missingInfoQuestions,
         currentAssessment: analysis.currentAssessment,
         riskPresentation: analysis.riskPresentation,
+        dogProfileUsage: analysis.dogProfileUsage,
+        trendSummary: analysis.trendSummary,
         kakaoActionText: buildKakaoActionText({
           source: "daily_status",
           dogName: analysis.dogName,
@@ -167,6 +200,8 @@ function createMcpServer(): McpServer {
           knownInfo: analysis.knownInfo,
           missingInfoQuestions: analysis.missingInfoQuestions,
           ownerConcern: input.ownerConcern,
+          dogProfileUsage: analysis.dogProfileUsage,
+          trendSummary: analysis.trendSummary,
         }),
         todayCareRecommendations: [
           care.dietManagement,
@@ -186,7 +221,7 @@ function createMcpServer(): McpServer {
     {
       title: "Create Daily Dog Care Note",
       description:
-        "Creates one combined daily care note with risk classification, diet, walk, rest guidance, and vet summary in MeongCareNote MCP(멍케어노트 MCP).",
+        "Creates a combined daily care note with dogProfile defaults, recent-record trends, care guidance, and a vet summary in MeongCareNote MCP(멍케어노트 MCP).",
       annotations: {
         title: "Create Daily Dog Care Note",
         readOnlyHint: true,
@@ -274,7 +309,7 @@ function createMcpServer(): McpServer {
     {
       title: "Summarize Pet Chat For Vet",
       description:
-        "Structures chatText read from a conversation or screenshot by the host Agent into a veterinary consultation note. MeongCareNote MCP(멍케어노트 MCP) does not access KakaoTalk or perform OCR, and it does not diagnose disease or prescribe treatment.",
+        "Structures host-provided chatText with optional dogProfile and recentRecords into a veterinary consultation note. MeongCareNote MCP(멍케어노트 MCP) does not access KakaoTalk, perform OCR, diagnose disease, or prescribe treatment.",
       annotations: {
         title: "Summarize Pet Chat For Vet",
         readOnlyHint: true,
@@ -295,6 +330,8 @@ function createMcpServer(): McpServer {
         chatEndedAt: z.string().optional(),
         screenshotTakenAt: z.string().optional(),
         ownerMemo: z.string().optional(),
+        dogProfile: dogProfileSchema,
+        recentRecords: z.array(recentDailyStatusRecordSchema).optional(),
       },
     },
     async (input) => {
@@ -363,7 +400,7 @@ function createMcpServer(): McpServer {
     {
       title: "Record Pet Photo Observation",
       description:
-        "Records observation text supplied by a guardian or host Agent and structures concern signs without inspecting or diagnosing the original photo in MeongCareNote MCP(멍케어노트 MCP).",
+        "Records guardian or host-Agent observation text with optional dogProfile context without inspecting or diagnosing the original photo in MeongCareNote MCP(멍케어노트 MCP).",
       annotations: {
         title: "Record Pet Photo Observation",
         readOnlyHint: false,
@@ -399,6 +436,7 @@ function createMcpServer(): McpServer {
         appetite: z.enum(["normal", "less", "none", "unknown"]).optional(),
         vomiting: z.enum(["none", "once", "multiple", "unknown"]).optional(),
         energy: z.enum(["normal", "low", "very_low", "unknown"]).optional(),
+        dogProfile: dogProfileSchema,
       },
     },
     async (input) => {
@@ -412,7 +450,7 @@ function createMcpServer(): McpServer {
     {
       title: "Record Food Ingestion Event",
       description:
-        "Records a dog food ingestion event and prepares a veterinary consultation summary in MeongCareNote MCP(멍케어노트 MCP).",
+        "Records a dog food ingestion event, applies optional dogProfile basics, and prepares a veterinary consultation summary in MeongCareNote MCP(멍케어노트 MCP).",
       annotations: {
         title: "Record Food Ingestion Event",
         readOnlyHint: false,
@@ -431,6 +469,7 @@ function createMcpServer(): McpServer {
         imageBase64: z.string().optional(),
         currentSymptoms: z.array(z.string()).optional(),
         ownerMemo: z.string().optional(),
+        dogProfile: dogProfileSchema,
       },
     },
     async (input) => {
@@ -457,6 +496,8 @@ function dailyStatusSchema() {
     foodOrSnackToday: z.array(z.string()).optional(),
     symptomStartedAt: z.string().optional(),
     ownerConcern: z.string().optional(),
+    dogProfile: dogProfileSchema,
+    recentRecords: z.array(recentDailyStatusRecordSchema).optional(),
   };
 }
 

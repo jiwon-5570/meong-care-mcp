@@ -1,5 +1,8 @@
 import { checkFoodSafety } from "./foodRules.js";
+import { mergeDogProfile } from "./dogProfileRules.js";
 import { buildDailyRiskPresentation, type RiskPresentation } from "./riskPresentationRules.js";
+import { buildTrendSummary, type RecentDailyStatusRecord, type TrendSummary } from "./trendSummaryRules.js";
+import type { DogProfile, DogProfileUsage } from "../types/dogProfile.js";
 
 export type AppetiteStatus = "normal" | "less" | "none" | "increased" | "unknown";
 export type StoolStatus = "normal" | "soft" | "diarrhea" | "bloody" | "unknown";
@@ -21,6 +24,8 @@ export interface DailyStatusInput {
   foodOrSnackToday?: string[];
   symptomStartedAt?: string;
   ownerConcern?: string;
+  dogProfile?: DogProfile;
+  recentRecords?: RecentDailyStatusRecord[];
 }
 
 export interface NormalizedDailyStatusInput {
@@ -37,6 +42,8 @@ export interface NormalizedDailyStatusInput {
   foodOrSnackToday: string[];
   symptomStartedAt?: string;
   ownerConcern?: string;
+  dogProfileUsage: DogProfileUsage;
+  recentRecords: RecentDailyStatusRecord[];
 }
 
 export interface DailyStatusAnalysis {
@@ -48,6 +55,8 @@ export interface DailyStatusAnalysis {
   missingInfoQuestions: string[];
   currentAssessment: string;
   riskPresentation: RiskPresentation;
+  dogProfileUsage: DogProfileUsage;
+  trendSummary: TrendSummary;
 }
 
 interface DangerousFoodSignal {
@@ -82,23 +91,26 @@ const DANGEROUS_FOOD_KEYWORDS = [
 ];
 
 export function normalizeDailyStatusInput(input: DailyStatusInput): NormalizedDailyStatusInput {
-  const ownerConcern = cleanOptional(input.ownerConcern);
+  const merged = mergeDogProfile(input);
+  const ownerConcern = cleanOptional(merged.ownerConcern);
   const normalizedConcern = normalizeText(ownerConcern ?? "");
 
   return {
-    dogName: cleanOptional(input.dogName) ?? "반려견",
-    ageYears: input.ageYears,
-    weightKg: input.weightKg,
-    appetite: input.appetite ?? inferAppetiteStatus(normalizedConcern) ?? "unknown",
-    stool: input.stool ?? inferStoolStatus(normalizedConcern) ?? "unknown",
-    vomiting: input.vomiting ?? inferVomitingStatus(normalizedConcern) ?? "unknown",
-    energy: input.energy ?? inferEnergyStatus(normalizedConcern) ?? "unknown",
-    coughing: input.coughing ?? inferBooleanSignal(normalizedConcern, ["기침", "콜록", "켁켁", "숨소리"]),
-    itching: input.itching ?? inferBooleanSignal(normalizedConcern, ["가려", "긁", "핥", "피부"]),
-    eyeDischarge: input.eyeDischarge ?? inferBooleanSignal(normalizedConcern, ["눈곱", "눈물", "눈이붉", "눈충혈"]),
-    foodOrSnackToday: normalizeStringList(input.foodOrSnackToday),
-    symptomStartedAt: cleanOptional(input.symptomStartedAt),
+    dogName: cleanOptional(merged.dogName) ?? "반려견",
+    ageYears: merged.ageYears,
+    weightKg: merged.weightKg,
+    appetite: merged.appetite ?? inferAppetiteStatus(normalizedConcern) ?? "unknown",
+    stool: merged.stool ?? inferStoolStatus(normalizedConcern) ?? "unknown",
+    vomiting: merged.vomiting ?? inferVomitingStatus(normalizedConcern) ?? "unknown",
+    energy: merged.energy ?? inferEnergyStatus(normalizedConcern) ?? "unknown",
+    coughing: merged.coughing ?? inferBooleanSignal(normalizedConcern, ["기침", "콜록", "켁켁", "숨소리"]),
+    itching: merged.itching ?? inferBooleanSignal(normalizedConcern, ["가려", "긁", "핥", "피부"]),
+    eyeDischarge: merged.eyeDischarge ?? inferBooleanSignal(normalizedConcern, ["눈곱", "눈물", "눈이붉", "눈충혈"]),
+    foodOrSnackToday: normalizeStringList(merged.foodOrSnackToday),
+    symptomStartedAt: cleanOptional(merged.symptomStartedAt),
     ownerConcern,
+    dogProfileUsage: merged.dogProfileUsage,
+    recentRecords: merged.recentRecords ?? [],
   };
 }
 
@@ -128,6 +140,8 @@ export function analyzeDailyStatus(input: DailyStatusInput): DailyStatusAnalysis
       missingInfoQuestions,
       currentAssessment: buildCurrentAssessment("urgent"),
       riskPresentation: buildDailyRiskPresentation("urgent", reasons, mainSymptoms),
+      dogProfileUsage: normalized.dogProfileUsage,
+      trendSummary: summarizeTrend(normalized, "urgent", mainSymptoms),
     };
   }
 
@@ -150,6 +164,8 @@ export function analyzeDailyStatus(input: DailyStatusInput): DailyStatusAnalysis
       missingInfoQuestions,
       currentAssessment: buildCurrentAssessment("vet_consult"),
       riskPresentation: buildDailyRiskPresentation("vet_consult", reasons, mainSymptoms),
+      dogProfileUsage: normalized.dogProfileUsage,
+      trendSummary: summarizeTrend(normalized, "vet_consult", mainSymptoms),
     };
   }
 
@@ -168,6 +184,8 @@ export function analyzeDailyStatus(input: DailyStatusInput): DailyStatusAnalysis
       missingInfoQuestions,
       currentAssessment: buildCurrentAssessment("watch"),
       riskPresentation: buildDailyRiskPresentation("watch", reasons, mainSymptoms),
+      dogProfileUsage: normalized.dogProfileUsage,
+      trendSummary: summarizeTrend(normalized, "watch", mainSymptoms),
     };
   }
 
@@ -182,6 +200,8 @@ export function analyzeDailyStatus(input: DailyStatusInput): DailyStatusAnalysis
     missingInfoQuestions,
     currentAssessment: buildCurrentAssessment("normal"),
     riskPresentation: buildDailyRiskPresentation("normal", reasons, []),
+    dogProfileUsage: normalized.dogProfileUsage,
+    trendSummary: summarizeTrend(normalized, "normal", []),
   };
 }
 
@@ -216,7 +236,7 @@ function collectUrgentReasons(
 
 function collectDangerousFoodSignal(input: NormalizedDailyStatusInput): DangerousFoodSignal {
   const foodCandidates = [
-    ...input.foodOrSnackToday,
+    ...input.foodOrSnackToday.filter((food) => !isUsualFoodReference(food)),
     ...(input.ownerConcern !== undefined ? [input.ownerConcern] : []),
   ];
   const dangerousFoods = new Set<string>();
@@ -330,6 +350,10 @@ function buildKnownInfo(
 ): string[] {
   const knownInfo: string[] = [];
 
+  if (input.dogProfileUsage.profileSummary !== "dogProfile이 제공되지 않았습니다.") {
+    knownInfo.push(`프로필 참고: ${input.dogProfileUsage.profileSummary}`);
+  }
+
   if (cleanOptional(original.dogName) !== undefined) {
     knownInfo.push(`이름: ${input.dogName}`);
   }
@@ -364,8 +388,9 @@ function buildKnownInfo(
     knownInfo.push("증상 기간: 보호자 표현에 지속 또는 시작 시점 단서가 있습니다.");
   }
 
-  if (input.foodOrSnackToday.length > 0) {
-    knownInfo.push(`최근 음식/간식: ${input.foodOrSnackToday.join(", ")}`);
+  const recentFoods = input.foodOrSnackToday.filter((food) => !isUsualFoodReference(food));
+  if (recentFoods.length > 0) {
+    knownInfo.push(`최근 음식/간식: ${recentFoods.join(", ")}`);
   }
 
   if (dangerousFoodSignal.foods.length > 0) {
@@ -390,7 +415,7 @@ function buildMissingInfoQuestions(
 ): string[] {
   const questions: string[] = [];
 
-  if (cleanOptional(original.dogName) === undefined) {
+  if (input.dogName === "반려견") {
     questions.push("반려견 이름을 알려주세요.");
   }
 
@@ -414,12 +439,19 @@ function buildMissingInfoQuestions(
     questions.push("활동량은 어떤가요? 예: 평소와 같음, 낮음, 매우 무기력함");
   }
 
-  if (input.foodOrSnackToday.length === 0 && dangerousFoodSignal.foods.length === 0) {
+  if (
+    input.foodOrSnackToday.filter((food) => !isUsualFoodReference(food)).length === 0 &&
+    dangerousFoodSignal.foods.length === 0
+  ) {
     questions.push("최근 먹은 음식이나 간식, 위험할 수 있는 음식 섭취 여부를 알려주세요.");
   }
 
-  if (input.ageYears === undefined || input.weightKg === undefined) {
+  if (input.ageYears === undefined && input.weightKg === undefined) {
     questions.push("반려견 나이와 몸무게를 알려주세요.");
+  } else if (input.ageYears === undefined) {
+    questions.push("반려견 나이를 알려주세요.");
+  } else if (input.weightKg === undefined) {
+    questions.push("반려견 몸무게를 알려주세요.");
   }
 
   return uniqueStrings(questions);
@@ -623,15 +655,38 @@ function hasOnlyMissingInformation(input: NormalizedDailyStatusInput, original: 
     input.coughing !== true &&
     input.itching !== true &&
     input.eyeDischarge !== true &&
-    input.foodOrSnackToday.length === 0;
+    input.foodOrSnackToday.filter((food) => !isUsualFoodReference(food)).length === 0;
 
   return allUnknown && (
     Object.keys(original).length === 0 ||
     original.ownerConcern !== undefined ||
     original.dogName !== undefined ||
     original.ageYears !== undefined ||
-    original.weightKg !== undefined
+    original.weightKg !== undefined ||
+    original.dogProfile !== undefined ||
+    original.recentRecords !== undefined
   );
+}
+
+function summarizeTrend(
+  input: NormalizedDailyStatusInput,
+  riskLevel: DailyRiskLevel,
+  mainSymptoms: string[],
+): TrendSummary {
+  return buildTrendSummary({
+    dogName: input.dogName,
+    riskLevel,
+    mainSymptoms,
+    appetite: input.appetite,
+    stool: input.stool,
+    vomiting: input.vomiting,
+    energy: input.energy,
+    recentRecords: input.recentRecords,
+  });
+}
+
+function isUsualFoodReference(value: string): boolean {
+  return normalizeText(value).startsWith("평소사료:");
 }
 
 function isSensitiveAge(ageYears: number | undefined): boolean {

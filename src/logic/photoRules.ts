@@ -3,10 +3,12 @@ import type {
   PhotoObservationInput,
   PhotoType,
 } from "../types/photoRecord.js";
+import { mergeDogProfile } from "./dogProfileRules.js";
 import { buildKakaoActionText } from "./kakaoActionTextRules.js";
 import { buildDailyRiskPresentation } from "./riskPresentationRules.js";
 import { buildVetShareCard } from "./vetShareCardRules.js";
 import type { DailyRiskLevel } from "./riskRules.js";
+import type { DogProfileUsage } from "../types/dogProfile.js";
 
 interface SignRule {
   sign: string;
@@ -37,49 +39,53 @@ const SKIN_SIGN_RULES: SignRule[] = [
 ];
 
 export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObservationAnalysis {
-  const signs = extractSigns(input);
-  const riskLevel = classifyPhotoRisk(input.photoType, signs, input);
+  const merged = mergeDogProfile(input);
+  const signs = extractSigns(merged);
+  const riskLevel = classifyPhotoRisk(merged.photoType, signs, merged);
   const riskPresentation = buildDailyRiskPresentation(
     riskLevel,
-    buildPhotoRiskReasons(input.photoType, signs, riskLevel),
+    buildPhotoRiskReasons(merged.photoType, signs, riskLevel),
     signs,
   );
-  const missingInfoQuestions = buildPhotoMissingInfoQuestions(input, signs);
+  const missingInfoQuestions = buildPhotoMissingInfoQuestions(merged, signs);
   const vetShareCard = buildVetShareCard({
     source: "photo_observation",
-    dogName: input.dogName,
+    dogName: merged.dogName,
     riskLevel,
     riskPresentation,
-    symptoms: [...(input.relatedSymptoms ?? []), ...signs],
+    symptoms: [...(merged.relatedSymptoms ?? []), ...signs],
     observedSigns: signs,
-    photoType: input.photoType,
-    appetite: input.appetite,
-    vomiting: input.vomiting,
-    energy: input.energy,
-    ownerConcern: input.visualNotes,
+    photoType: merged.photoType,
+    appetite: merged.appetite,
+    vomiting: merged.vomiting,
+    energy: merged.energy,
+    ownerConcern: buildProfileAwareMemo(merged.visualNotes, merged.dogProfileUsage),
     missingInfoQuestions,
     questionsForVet: buildPhotoQuestionsForVet(input.photoType, riskLevel),
   });
   const kakaoActionText = buildKakaoActionText({
     source: "photo_observation",
-    dogName: input.dogName,
+    dogName: merged.dogName,
     riskLevel,
     riskPresentation,
-    mainSymptoms: [...(input.relatedSymptoms ?? []), ...(input.observedSigns ?? []), ...signs],
-    observedSigns: [...(input.observedSigns ?? []), ...signs],
-    ownerConcern: input.visualNotes,
+    mainSymptoms: [...(merged.relatedSymptoms ?? []), ...(merged.observedSigns ?? []), ...signs],
+    observedSigns: [...(merged.observedSigns ?? []), ...signs],
+    knownInfo: buildProfileKnownInfo(merged.dogProfileUsage),
+    ownerConcern: merged.visualNotes,
     missingInfoQuestions,
     vetShareCard,
+    dogProfileUsage: merged.dogProfileUsage,
   });
 
   return {
     observedAbnormalSigns: signs,
     riskLevel,
-    todayCareActions: buildCareActions(input.photoType, signs, riskLevel),
-    vetSummary: buildVetSummary(input, signs, riskLevel),
+    todayCareActions: buildCareActions(merged.photoType, signs, riskLevel),
+    vetSummary: buildVetSummary(merged, signs, riskLevel),
     riskPresentation,
     vetShareCard,
     kakaoActionText,
+    dogProfileUsage: merged.dogProfileUsage,
     photoLimitations:
       "MCP는 사진 원본을 분석하거나 진단하지 않습니다. 보호자 또는 호스트 AI가 제공한 관찰 텍스트를 기록하고 구조화하며, 실제 상태가 심해 보이거나 증상이 지속되면 수의사 상담을 권장합니다.",
     hospitalSearchGuide:
@@ -87,6 +93,24 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
         ? "위험도가 vet_consult 이상이면 find_nearby_animal_hospitals tool로 가까운 동물병원을 찾고 방문 전 전화 확인을 권장합니다."
         : undefined,
   };
+}
+
+function buildProfileKnownInfo(dogProfileUsage: DogProfileUsage): string[] {
+  return dogProfileUsage.profileSummary !== "dogProfile이 제공되지 않았습니다."
+    ? [`프로필 참고: ${dogProfileUsage.profileSummary}`]
+    : [];
+}
+
+function buildProfileAwareMemo(
+  visualNotes: string | undefined,
+  dogProfileUsage: DogProfileUsage,
+): string | undefined {
+  const parts = [
+    visualNotes,
+    ...buildProfileKnownInfo(dogProfileUsage),
+  ].filter((value): value is string => value !== undefined && value.trim().length > 0);
+
+  return parts.length > 0 ? parts.join(" / ") : undefined;
 }
 
 function buildPhotoMissingInfoQuestions(

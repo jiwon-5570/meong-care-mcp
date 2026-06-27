@@ -173,6 +173,100 @@ test("daily status normal result includes low severity risk presentation", () =>
   assert.equal(analysis.riskLevel, "normal");
   assert.match(analysis.riskPresentation.riskBadge, /🟢/);
   assert.equal(analysis.riskPresentation.severityOrder, 1);
+  assert.equal(analysis.trendSummary.comparedWithRecentRecords, false);
+  assert.equal(analysis.trendSummary.trendLabel, "no_recent_data");
+});
+
+test("daily status fills missing basics from dogProfile", () => {
+  const analysis = analyzeDailyStatus({
+    dogProfile: {
+      dogName: "몽이",
+      ageYears: 6,
+      weightKg: 11,
+      usualFood: "닭고기 사료",
+      usualStool: "보통",
+    },
+    ownerConcern: "오늘 밥을 반만 먹고 변이 묽어요. 구토는 없어요.",
+  });
+
+  assert.equal(analysis.dogName, "몽이");
+  assert.equal(analysis.dogProfileUsage.applied, true);
+  assert.ok(analysis.dogProfileUsage.appliedFields.includes("dogName"));
+  assert.ok(analysis.dogProfileUsage.appliedFields.includes("ageYears"));
+  assert.ok(analysis.dogProfileUsage.appliedFields.includes("weightKg"));
+  assert.match(`${analysis.knownInfo.join(" ")} ${analysis.dogProfileUsage.profileSummary}`, /몽이/);
+  assert.doesNotMatch(analysis.missingInfoQuestions.join(" "), /몸무게/);
+  assert.ok(["watch", "vet_consult"].includes(analysis.riskLevel));
+});
+
+test("explicit daily status values take priority over dogProfile", () => {
+  const analysis = analyzeDailyStatus({
+    dogName: "초코",
+    weightKg: 7,
+    dogProfile: {
+      dogName: "몽이",
+      weightKg: 11,
+    },
+    ownerConcern: "밥을 안 먹어요.",
+  });
+
+  assert.equal(analysis.dogName, "초코");
+  assert.match(`${analysis.knownInfo.join(" ")} ${analysis.dogProfileUsage.profileSummary}`, /7kg/);
+  assert.ok(!analysis.dogProfileUsage.appliedFields.includes("dogName"));
+  assert.ok(!analysis.dogProfileUsage.appliedFields.includes("weightKg"));
+  assert.doesNotMatch(analysis.missingInfoQuestions.join(" "), /몸무게/);
+});
+
+test("daily care note compares repeated signals with recent records", () => {
+  const note = createDailyCareNote({
+    dogProfile: {
+      dogName: "몽이",
+      ageYears: 6,
+      weightKg: 11,
+    },
+    ownerConcern: "오늘도 밥을 거의 안 먹고 변이 묽어요.",
+    recentRecords: [
+      {
+        recordedAt: "어제",
+        dogName: "몽이",
+        riskLevel: "watch",
+        mainSymptoms: ["식욕 감소", "묽은 변"],
+        appetite: "less",
+        stool: "soft",
+        vomiting: "none",
+        energy: "normal",
+      },
+    ],
+  });
+
+  assert.equal(note.trendSummary.comparedWithRecentRecords, true);
+  assert.ok(note.trendSummary.repeatedSignals.some((signal) => /식욕 감소|묽은 변/.test(signal)));
+  assert.ok(["repeated", "worsening", "mixed"].includes(note.trendSummary.trendLabel));
+  assert.match(note.userFriendlyGuide, /최근 기록|반복/);
+  assert.match(note.kakaoActionText.whyThisRisk.join(" "), /최근 기록|반복|나빠진/);
+});
+
+test("daily trend reports higher risk than recent record", () => {
+  const analysis = analyzeDailyStatus({
+    dogProfile: { dogName: "몽이", weightKg: 11 },
+    ownerConcern: "오늘은 계속 토하고 축 처져 있어요.",
+    recentRecords: [
+      {
+        recordedAt: "어제",
+        dogName: "몽이",
+        riskLevel: "watch",
+        mainSymptoms: ["식욕 감소"],
+        appetite: "less",
+        vomiting: "none",
+        energy: "normal",
+      },
+    ],
+  });
+
+  assert.equal(analysis.riskLevel, "urgent");
+  assert.ok(analysis.trendSummary.worseningSignals.length >= 1);
+  assert.ok(["worsening", "mixed"].includes(analysis.trendSummary.trendLabel));
+  assert.match(analysis.trendSummary.userMessage, /최근 기록/);
 });
 
 test("daily care note combines analysis, care guidance, and vet summary", () => {
@@ -276,6 +370,26 @@ test("pet chat summary elevates dangerous food mention to urgent", () => {
   assert.match(summary.vetShareCard.copyableText, /샤인머스캣/);
   assert.ok(summary.foodMentions.some((food) => food.includes("샤인머스캣")));
   assert.match(summary.riskReasons.join(" "), /위험 음식|빠른 동물병원 상담 권장/);
+});
+
+test("pet chat summary fills profile and keeps share outputs", () => {
+  const summary = summarizePetChatForVet({
+    sourceType: "screenshot_ocr",
+    dogProfile: {
+      dogName: "몽이",
+      ageYears: 6,
+      weightKg: 11,
+    },
+    chatText: "엄마: 아침부터 밥을 거의 안 먹어. 동생: 변도 좀 묽어. 엄마: 구토는 안 했어.",
+  });
+
+  assert.equal(summary.dogName, "몽이");
+  assert.equal(summary.ageYears, 6);
+  assert.equal(summary.weightKg, 11);
+  assert.equal(summary.dogProfileUsage.applied, true);
+  assert.match(summary.analyzedTextSummary, /몽이.*6살.*11kg/);
+  assert.match(summary.vetShareCard.copyableText, /몽이/);
+  assert.match(summary.kakaoActionText.familyShareText, /몽이/);
 });
 
 test("daily care rules adapt guidance by symptoms and age", () => {
@@ -429,6 +543,27 @@ test("food ingestion event produces missing questions and danger summary", () =>
   assert.match(analysis.kakaoActionText.whyThisRisk.join(" "), /위험 음식|포도|샤인머스캣/);
 });
 
+test("food ingestion event fills dog name and weight from dogProfile", () => {
+  const analysis = analyzeFoodIngestionEvent({
+    dogProfile: {
+      dogName: "몽이",
+      weightKg: 11,
+    },
+    foodName: "포도",
+    foodDetail: "샤인머스캣",
+    amount: "두 알",
+    eatenAt: "30분 전",
+    currentSymptoms: ["증상 없음"],
+  });
+
+  assert.equal(analysis.recordedSummary.dogName, "몽이");
+  assert.equal(analysis.recordedSummary.weightKg, 11);
+  assert.equal(analysis.dogProfileUsage.applied, true);
+  assert.equal(analysis.riskLevel, "danger");
+  assert.match(analysis.vetShareCard.copyableText, /몽이/);
+  assert.match(analysis.kakaoActionText.vetCallScript, /몽이/);
+});
+
 function assertKakaoActionText(kakaoActionText) {
   assert.equal(typeof kakaoActionText, "object");
   assert.equal(typeof kakaoActionText.chatFirstReply, "string");
@@ -445,7 +580,7 @@ function assertKakaoActionText(kakaoActionText) {
   const serialized = JSON.stringify(kakaoActionText);
   assert.doesNotMatch(
     serialized,
-    /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|정상 괜찮습니다|완치/,
+    /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|정상 괜찮습니다|확실히 괜찮습니다|완치/,
   );
 }
 
@@ -456,7 +591,7 @@ function assertVetShareCardText(vetShareCard) {
   assert.match(vetShareCard.copyableText, /진단이나 처방이 아닙니다/);
   assert.doesNotMatch(
     vetShareCard.copyableText,
-    /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|정상 괜찮습니다|완치/,
+    /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|정상 괜찮습니다|확실히 괜찮습니다|완치/,
   );
 }
 

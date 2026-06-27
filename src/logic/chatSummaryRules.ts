@@ -1,7 +1,10 @@
 import { checkFoodSafety } from "./foodRules.js";
+import { mergeDogProfile } from "./dogProfileRules.js";
 import { buildKakaoActionText, type KakaoActionText } from "./kakaoActionTextRules.js";
 import { buildDailyRiskPresentation, type RiskPresentation } from "./riskPresentationRules.js";
+import { buildTrendSummary, type RecentDailyStatusRecord, type TrendSummary } from "./trendSummaryRules.js";
 import { buildVetShareCard, type VetShareCard } from "./vetShareCardRules.js";
+import type { DogProfile, DogProfileUsage } from "../types/dogProfile.js";
 import type {
   AppetiteStatus,
   DailyRiskLevel,
@@ -24,6 +27,8 @@ export interface PetChatSummaryInput {
   chatEndedAt?: string;
   screenshotTakenAt?: string;
   ownerMemo?: string;
+  dogProfile?: DogProfile;
+  recentRecords?: RecentDailyStatusRecord[];
 }
 
 export interface PetChatSummaryResult {
@@ -43,6 +48,8 @@ export interface PetChatSummaryResult {
   riskReasons: string[];
   riskPresentation: RiskPresentation;
   missingInfoQuestions: string[];
+  dogProfileUsage: DogProfileUsage;
+  trendSummary: TrendSummary;
   vetVisitSummary: string;
   vetShareCard: VetShareCard;
   kakaoActionText: KakaoActionText;
@@ -91,24 +98,35 @@ const FOOD_KEYWORDS = [
 ];
 
 export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSummaryResult {
-  const text = input.chatText.trim();
+  const merged = mergeDogProfile(input);
+  const text = merged.chatText.trim();
   const normalizedText = normalize(text);
   const signals = extractSignals(text, normalizedText);
-  const risk = classifyChatRisk(input, signals, normalizedText);
+  const risk = classifyChatRisk(merged, signals, normalizedText);
   const riskPresentation = buildDailyRiskPresentation(
     risk.riskLevel,
     risk.riskReasons,
     signals.extractedSymptoms,
   );
-  const timeline = extractTimeline(input, text, normalizedText);
-  const missingInfoQuestions = buildMissingInfoQuestions(input, signals, timeline, normalizedText);
-  const analyzedTextSummary = buildAnalyzedTextSummary(input, signals, risk.riskLevel, riskPresentation);
+  const timeline = extractTimeline(merged, text, normalizedText);
+  const missingInfoQuestions = buildMissingInfoQuestions(merged, signals, timeline, normalizedText);
+  const analyzedTextSummary = buildAnalyzedTextSummary(merged, signals, risk.riskLevel, riskPresentation);
   const questionsForVet = buildQuestionsForVet(signals, risk.riskLevel);
+  const trendSummary = buildTrendSummary({
+    dogName: normalizeOptional(merged.dogName) ?? "반려견",
+    riskLevel: risk.riskLevel,
+    mainSymptoms: signals.extractedSymptoms,
+    appetite: signals.appetiteStatus,
+    stool: signals.stoolStatus,
+    vomiting: signals.vomitingStatus,
+    energy: signals.energyStatus,
+    recentRecords: merged.recentRecords,
+  });
   const vetShareCard = buildVetShareCard({
     source: "chat_summary",
-    dogName: input.dogName,
-    ageYears: input.ageYears,
-    weightKg: input.weightKg,
+    dogName: merged.dogName,
+    ageYears: merged.ageYears,
+    weightKg: merged.weightKg,
     riskLevel: risk.riskLevel,
     riskPresentation,
     symptoms: signals.extractedSymptoms,
@@ -118,31 +136,34 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
     vomiting: signals.vomitingStatus,
     energy: signals.energyStatus,
     foodOrSnackToday: signals.foodMentions,
-    ownerConcern: input.ownerMemo,
+    ownerConcern: buildProfileAwareMemo(merged.ownerMemo, merged.dogProfileUsage),
     missingInfoQuestions,
     questionsForVet,
     privacyNote: PRIVACY_NOTICE,
   });
   const kakaoActionText = buildKakaoActionText({
     source: "chat_summary",
-    dogName: input.dogName,
+    dogName: merged.dogName,
     riskLevel: risk.riskLevel,
     riskPresentation,
     mainSymptoms: signals.extractedSymptoms,
+    knownInfo: buildProfileKnownInfo(merged.dogProfileUsage),
     missingInfoQuestions,
     foodName: signals.foodMentions.join(", "),
-    familyContext: input.sourceType === "screenshot_ocr"
+    familyContext: merged.sourceType === "screenshot_ocr"
       ? "가족 대화 캡처에서 호스트 Agent가 읽어낸 텍스트 기반"
       : "보호자가 제공한 대화 텍스트 기반",
-    ownerConcern: input.ownerMemo,
+    ownerConcern: merged.ownerMemo,
     vetShareCard,
+    dogProfileUsage: merged.dogProfileUsage,
+    trendSummary,
   });
 
   return {
-    sourceType: input.sourceType,
-    dogName: normalizeOptional(input.dogName),
-    ageYears: input.ageYears ?? null,
-    weightKg: input.weightKg ?? null,
+    sourceType: merged.sourceType,
+    dogName: normalizeOptional(merged.dogName),
+    ageYears: merged.ageYears ?? null,
+    weightKg: merged.weightKg ?? null,
     analyzedTextSummary,
     extractedTimeline: timeline,
     extractedSymptoms: signals.extractedSymptoms,
@@ -155,8 +176,10 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
     riskReasons: risk.riskReasons,
     riskPresentation,
     missingInfoQuestions,
+    dogProfileUsage: merged.dogProfileUsage,
+    trendSummary,
     vetVisitSummary: buildVetVisitSummary(
-      input,
+      merged,
       signals,
       risk.riskLevel,
       risk.riskReasons,
@@ -168,6 +191,24 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
     questionsForVet,
     privacyNotice: PRIVACY_NOTICE,
   };
+}
+
+function buildProfileKnownInfo(dogProfileUsage: DogProfileUsage): string[] {
+  return dogProfileUsage.profileSummary !== "dogProfile이 제공되지 않았습니다."
+    ? [`프로필 참고: ${dogProfileUsage.profileSummary}`]
+    : [];
+}
+
+function buildProfileAwareMemo(
+  ownerMemo: string | undefined,
+  dogProfileUsage: DogProfileUsage,
+): string | undefined {
+  const parts = [
+    normalizeOptional(ownerMemo),
+    ...buildProfileKnownInfo(dogProfileUsage),
+  ].filter((value): value is string => value !== null && value.length > 0);
+
+  return parts.length > 0 ? parts.join(" / ") : undefined;
 }
 
 function extractSignals(text: string, normalizedText: string): ExtractedChatSignals {
@@ -508,10 +549,15 @@ function buildAnalyzedTextSummary(
   riskPresentation: RiskPresentation,
 ): string {
   const sourceLabel = sourceTypeToKorean(input.sourceType);
+  const profileLabel = [
+    normalizeOptional(input.dogName) ?? "반려견",
+    input.ageYears !== undefined ? `${input.ageYears}살` : null,
+    input.weightKg !== undefined ? `${input.weightKg}kg` : null,
+  ].filter((value): value is string => value !== null).join(" / ");
   const symptomText = signals.extractedSymptoms.length > 0 ? signals.extractedSymptoms.join(", ") : "뚜렷한 증상 표현 없음";
   const foodText = signals.foodMentions.length > 0 ? signals.foodMentions.join(", ") : "음식 언급 없음";
 
-  return `${riskPresentation.riskBadge}: ${sourceLabel}에서 ${symptomText}을 확인했고, 음식 관련 언급은 ${foodText}입니다. 현재 기록 기준 위험도는 ${riskLevel}이며, ${riskPresentation.riskLabel} 단계입니다.`;
+  return `${riskPresentation.riskBadge}: ${profileLabel}의 ${sourceLabel}에서 ${symptomText}을 확인했고, 음식 관련 언급은 ${foodText}입니다. 현재 기록 기준 위험도는 ${riskLevel}이며, ${riskPresentation.riskLabel} 단계입니다.`;
 }
 
 function buildVetVisitSummary(

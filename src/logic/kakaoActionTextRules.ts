@@ -1,7 +1,9 @@
 import type { FoodRiskLevel } from "./foodRules.js";
 import type { RiskPresentation } from "./riskPresentationRules.js";
 import type { DailyRiskLevel } from "./riskRules.js";
+import type { TrendSummary } from "./trendSummaryRules.js";
 import type { VetShareCard } from "./vetShareCardRules.js";
+import type { DogProfileUsage } from "../types/dogProfile.js";
 
 export type KakaoActionSource =
   | "daily_status"
@@ -28,6 +30,8 @@ export interface KakaoActionTextInput {
   familyContext?: string | null;
   ownerConcern?: string | null;
   vetShareCard?: VetShareCard;
+  dogProfileUsage?: DogProfileUsage;
+  trendSummary?: TrendSummary;
 }
 
 export interface KakaoActionText {
@@ -62,6 +66,7 @@ const BANNED_REPLACEMENTS: Array<[RegExp, string]> = [
   [/진단했습니다/g, "관찰 내용을 정리했습니다"],
   [/처방합니다/g, "수의사와 상담해 주세요"],
   [/정상 괜찮습니다/g, "현재 입력에서는 큰 이상 신호가 뚜렷하지 않습니다"],
+  [/확실히 괜찮습니다/g, "현재 입력에서는 큰 이상 신호가 뚜렷하지 않습니다"],
   [/완치/g, "상태 회복"],
 ];
 
@@ -86,6 +91,8 @@ export function buildKakaoActionText(input: KakaoActionTextInput): KakaoActionTe
         focusText,
         missingInfoQuestions,
         input.familyContext,
+        input.dogProfileUsage,
+        input.trendSummary,
       ),
     ),
     familyShareText: sanitizeGeneratedText(
@@ -96,13 +103,19 @@ export function buildKakaoActionText(input: KakaoActionTextInput): KakaoActionTe
         focusText,
         missingInfoQuestions,
         input.familyContext,
+        input.trendSummary,
       ),
     ),
     vetCallScript: sanitizeGeneratedText(
       buildVetCallScript(input, dogName, riskText, symptoms),
     ),
     nextInputExample: sanitizeGeneratedText(
-      buildNextInputExample(input.source, dogName, missingInfoQuestions),
+      buildNextInputExample(
+        input.source,
+        dogName,
+        missingInfoQuestions,
+        input.dogProfileUsage,
+      ),
     ),
     whyThisRisk: buildWhyThisRisk(input, riskText, symptoms).map(sanitizeGeneratedText),
   };
@@ -115,15 +128,23 @@ function buildChatFirstReply(
   focusText: string,
   missingInfoQuestions: string[],
   familyContext: string | null | undefined,
+  dogProfileUsage: DogProfileUsage | undefined,
+  trendSummary: TrendSummary | undefined,
 ): string {
   const lines = [
     riskText.badge,
-    `${dogName}의 ${sourceLabel}을 정리했어요.`,
+    dogProfileUsage?.applied === true
+      ? `${dogName} 프로필을 참고해 ${sourceLabel}을 정리했어요.`
+      : `${dogName}의 ${sourceLabel}을 정리했어요.`,
   ];
 
   const context = cleanText(familyContext);
   if (context !== undefined) {
     lines.push(`${truncate(context, 90)}으로 정리했습니다.`);
+  }
+
+  if (trendSummary?.comparedWithRecentRecords === true) {
+    lines.push(`최근 기록 비교: ${truncate(trendSummary.trendRiskReason, 100)}`);
   }
 
   lines.push(focusText);
@@ -143,6 +164,7 @@ function buildFamilyShareText(
   focusText: string,
   missingInfoQuestions: string[],
   familyContext: string | null | undefined,
+  trendSummary: TrendSummary | undefined,
 ): string {
   const context = cleanText(familyContext);
   const title = context !== undefined
@@ -150,9 +172,14 @@ function buildFamilyShareText(
     : `${dogName} ${sourceLabel} 공유 내용이에요.`;
   const bullets = [
     `- ${focusText}`,
-    `- 현재 단계: ${riskText.label}`,
-    `- 지금 할 일: ${riskText.immediateAction}`,
   ];
+
+  if (trendSummary?.comparedWithRecentRecords === true) {
+    bullets.push(`- 최근 기록 비교: ${truncate(trendSummary.trendRiskReason, 90)}`);
+  }
+
+  bullets.push(`- 현재 단계: ${riskText.label}`);
+  bullets.push(`- 지금 할 일: ${riskText.immediateAction}`);
 
   if (missingInfoQuestions.length > 0) {
     bullets.push(`- 추가 확인: ${truncate(missingInfoQuestions[0], 100)}`);
@@ -208,20 +235,23 @@ function buildNextInputExample(
   source: KakaoActionSource,
   dogName: string,
   missingInfoQuestions: string[],
+  dogProfileUsage: DogProfileUsage | undefined,
 ): string {
   const missingHint = missingInfoQuestions.length > 0
     ? ` 추가로 확인할 내용: ${truncate(missingInfoQuestions[0], 90)}`
     : "";
 
   if (source === "food_ingestion" || source === "food_safety") {
-    return `다음에는 이렇게 알려주세요: ${dogName}이 30분 전에 포도 한 알을 먹었고, 몸무게는 11kg이며 현재 구토나 무기력은 없어요.${missingHint}`;
+    return dogProfileUsage?.applied === true
+      ? `다음에는 프로필 정보를 반복하지 않고 이렇게 알려주세요: ${dogName}이 30분 전에 포도 한 알을 먹었고 현재 구토나 무기력은 없어요.${missingHint}`
+      : `다음에는 이렇게 알려주세요: ${dogName}이 30분 전에 포도 한 알을 먹었고, 몸무게는 11kg이며 현재 구토나 무기력은 없어요.${missingHint}`;
   }
 
   if (source === "photo_observation") {
-    return `다음에는 이렇게 알려주세요: ${dogName} 사진 관찰 기록, 갈색의 묽은 변 1회, 식욕 감소, 구토 없음, 활동량은 평소와 같아요.${missingHint}`;
+    return `다음에는 ${dogProfileUsage?.applied === true ? "프로필 정보를 반복하지 않고 " : ""}이렇게 알려주세요: ${dogName} 사진 관찰 기록, 갈색의 묽은 변 1회, 식욕 감소, 구토 없음, 활동량은 평소와 같아요.${missingHint}`;
   }
 
-  return `다음에는 이렇게 알려주세요: ${dogName} 오늘 기록, 밥은 평소의 절반, 묽은 변 1회, 구토 없음, 활동량은 낮고 증상은 오늘 아침부터예요.${missingHint}`;
+  return `다음에는 ${dogProfileUsage?.applied === true ? "프로필 정보를 반복하지 않고 " : ""}이렇게 알려주세요: ${dogName} 오늘 기록, 밥은 평소의 절반, 묽은 변 1회, 구토 없음, 활동량은 낮고 증상은 오늘 아침부터예요.${missingHint}`;
 }
 
 function buildWhyThisRisk(
@@ -234,6 +264,10 @@ function buildWhyThisRisk(
 
   if (foodName !== undefined) {
     reasons.push(`${foodName} 섭취 정보가 기록되어 ${riskText.label} 단계로 분류했습니다.`);
+  }
+
+  if (input.trendSummary?.comparedWithRecentRecords === true) {
+    reasons.push(input.trendSummary.trendRiskReason);
   }
 
   for (const symptom of symptoms.slice(0, 2)) {

@@ -18,7 +18,7 @@ export async function recordPetPhotoObservation(
   const id = createPhotoRecordId(now);
   const record: StoredPhotoRecord = {
     id,
-    dogName: input.dogName ?? null,
+    dogName: input.dogName?.trim() || input.dogProfile?.dogName?.trim() || null,
     photoType: input.photoType,
     imageUrl: input.imageUrl ?? null,
     hasImageBase64: input.imageBase64 !== undefined,

@@ -1,4 +1,5 @@
 import { checkFoodSafety, type FoodRiskLevel } from "./foodRules.js";
+import { mergeDogProfile } from "./dogProfileRules.js";
 import { buildKakaoActionText, type KakaoActionText } from "./kakaoActionTextRules.js";
 import type { RiskPresentation } from "./riskPresentationRules.js";
 import { buildVetShareCard, type VetShareCard } from "./vetShareCardRules.js";
@@ -6,6 +7,7 @@ import type {
   FoodIngestionEventInput,
   FoodIngestionRecordedSummary,
 } from "../types/foodIngestionRecord.js";
+import type { DogProfileUsage } from "../types/dogProfile.js";
 
 export interface FoodIngestionAnalysis {
   riskLevel: FoodRiskLevel;
@@ -16,17 +18,19 @@ export interface FoodIngestionAnalysis {
   vetSummary: string;
   vetShareCard: VetShareCard;
   kakaoActionText: KakaoActionText;
+  dogProfileUsage: DogProfileUsage;
 }
 
 export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodIngestionAnalysis {
-  const currentSymptoms = normalizeSymptoms(input.currentSymptoms);
-  const recordedSummary = buildRecordedSummary(input, currentSymptoms);
+  const merged = mergeDogProfile(input);
+  const currentSymptoms = normalizeSymptoms(merged.currentSymptoms);
+  const recordedSummary = buildRecordedSummary(merged, currentSymptoms);
   const foodSafety = checkFoodSafety({
-    foodName: buildRiskTargetName(input),
-    amount: input.amount,
-    dogWeightKg: input.weightKg,
+    foodName: buildRiskTargetName(merged),
+    amount: merged.amount,
+    dogWeightKg: merged.weightKg,
   });
-  const missingInfoQuestions = buildMissingInfoQuestions(input);
+  const missingInfoQuestions = buildMissingInfoQuestions(merged);
   const immediateGuide = buildImmediateGuide(
     foodSafety.riskLevel,
     recordedSummary,
@@ -42,7 +46,7 @@ export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodI
     eatenAmount: recordedSummary.amount,
     eatenAt: recordedSummary.eatenAt,
     currentSymptoms: recordedSummary.currentSymptoms,
-    ownerConcern: recordedSummary.ownerMemo,
+    ownerConcern: buildProfileAwareMemo(recordedSummary.ownerMemo, merged.dogProfileUsage),
     missingInfoQuestions,
     questionsForVet: buildFoodIngestionQuestionsForVet(foodSafety.riskLevel),
   });
@@ -55,9 +59,11 @@ export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodI
     eatenAmount: recordedSummary.amount,
     eatenAt: recordedSummary.eatenAt,
     currentSymptoms: recordedSummary.currentSymptoms,
+    knownInfo: buildProfileKnownInfo(merged.dogProfileUsage),
     missingInfoQuestions,
     ownerConcern: recordedSummary.ownerMemo,
     vetShareCard,
+    dogProfileUsage: merged.dogProfileUsage,
   });
 
   return {
@@ -69,7 +75,26 @@ export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodI
     vetSummary: buildVetSummary(recordedSummary, foodSafety.riskLevel),
     vetShareCard,
     kakaoActionText,
+    dogProfileUsage: merged.dogProfileUsage,
   };
+}
+
+function buildProfileKnownInfo(dogProfileUsage: DogProfileUsage): string[] {
+  return dogProfileUsage.profileSummary !== "dogProfile이 제공되지 않았습니다."
+    ? [`프로필 참고: ${dogProfileUsage.profileSummary}`]
+    : [];
+}
+
+function buildProfileAwareMemo(
+  ownerMemo: string | null,
+  dogProfileUsage: DogProfileUsage,
+): string | undefined {
+  const parts = [
+    ownerMemo ?? undefined,
+    ...buildProfileKnownInfo(dogProfileUsage),
+  ].filter((value): value is string => value !== undefined && value.trim().length > 0);
+
+  return parts.length > 0 ? parts.join(" / ") : undefined;
 }
 
 export function buildMissingInfoQuestions(input: FoodIngestionEventInput): string[] {

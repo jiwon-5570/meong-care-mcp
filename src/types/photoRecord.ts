@@ -2,6 +2,7 @@ import type { DailyRiskLevel } from "../logic/riskRules.js";
 import type { KakaoActionText } from "../logic/kakaoActionTextRules.js";
 import type { RiskPresentation } from "../logic/riskPresentationRules.js";
 import type { VetShareCard } from "../logic/vetShareCardRules.js";
+import type { DogProfile, DogProfileUsage } from "./dogProfile.js";
 
 export type PhotoType = "stool" | "skin";
 export type AppetiteForPhoto = "normal" | "less" | "none" | "unknown";
@@ -20,6 +21,7 @@ export interface PhotoObservationInput {
   appetite?: AppetiteForPhoto;
   vomiting?: VomitingForPhoto;
   energy?: EnergyForPhoto;
+  dogProfile?: DogProfile;
 }
 
 export interface PhotoObservationAnalysis {
@@ -30,6 +32,7 @@ export interface PhotoObservationAnalysis {
   riskPresentation: RiskPresentation;
   vetShareCard: VetShareCard;
   kakaoActionText: KakaoActionText;
+  dogProfileUsage: DogProfileUsage;
   photoLimitations: string;
   hospitalSearchGuide?: string;
 }

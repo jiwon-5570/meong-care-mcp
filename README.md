@@ -36,6 +36,8 @@
 - 지역 기반 동물병원 후보 안내
 - 자연어 증상 표현 분류
 - 보호자 또는 호스트 AI가 제공한 변/피부 관찰 텍스트 기록
+- `dogProfile` 기반 이름, 나이, 몸무게, 평소 사료 자동 보정
+- `recentRecords` 기반 반복·악화 가능성·호전 가능성 비교
 
 ## 의료 안전 원칙
 
@@ -56,6 +58,32 @@
 - MCP는 `visualNotes`, `observedSigns`, `relatedSymptoms`로 전달된 관찰 텍스트만 사용합니다.
 - 캡처 OCR 또는 읽기는 호스트 AI의 책임이며, MCP는 전달된 `chatText`만 분석합니다.
 - `imageBase64`가 전달되더라도 MCP는 내용을 분석하지 않고 원문을 저장하지 않습니다.
+
+## 반려견 프로필 기반 자동 보정
+
+멍케어노트 MCP는 `dogProfile`을 입력받아 반려견 이름, 나이, 몸무게, 평소 사료, 평소 변 상태 같은 기본 정보를 자동 보정할 수 있습니다. 이를 통해 보호자는 매번 같은 정보를 반복 입력하지 않아도 “몽이가 오늘 밥을 반만 먹었어”처럼 짧게 기록할 수 있습니다.
+
+- 현재 요청에 명시한 값이 `dogProfile`보다 항상 우선합니다.
+- 실제로 보정한 필드와 부족한 프로필 필드는 `dogProfileUsage`에서 확인할 수 있습니다.
+- 평소 사료는 오늘 먹은 음식이 아니라 `평소 사료` 참고 정보로만 구분합니다.
+- `knownConditions`와 `regularMedicationMemo`는 보호자가 제공한 기록일 뿐, 새로운 질환 판단이나 약 복용 지시에는 사용하지 않습니다.
+- `dogProfile`이 없어도 기존 입력과 응답 동작은 유지됩니다.
+
+`dogProfile`은 `analyze_daily_status`, `create_daily_care_note`, `summarize_pet_chat_for_vet`, `record_food_ingestion_event`, `record_pet_photo_observation` 입력에서 사용할 수 있습니다.
+
+## 최근 기록 비교
+
+`recentRecords`가 함께 제공되면 오늘 상태를 최근 기록과 비교해 반복 신호, 나빠진 것으로 보이는 변화, 나아진 것으로 보이는 변화를 `trendSummary`로 정리합니다. 이 기능은 진단이 아니라 보호자 기록 비교 보조이며, 증상이 반복되거나 상태 변화가 보일 때 수의사 상담 준비에 참고할 수 있습니다.
+
+`trendSummary` 포함 정보:
+
+- 최근 기록 비교 여부와 기록 수
+- 반복된 신호 `repeatedSignals`
+- 나빠진 것으로 보이는 변화 `worseningSignals`
+- 나아진 것으로 보이는 변화 `improvingSignals`
+- 추세 라벨과 보호자용 설명
+
+최근 기록이 없으면 오늘 기록을 다음 비교를 위한 기준점으로 사용할 수 있다고 안내합니다. `recentRecords`는 `analyze_daily_status`, `create_daily_care_note`, `summarize_pet_chat_for_vet`에서 사용할 수 있습니다.
 
 ## MCP Tool 목록
 
@@ -450,6 +478,7 @@ meong-care-mcp/
 │  │  ├─ careRules.ts
 │  │  ├─ chatSummaryRules.ts
 │  │  ├─ dailyCareNoteRules.ts
+│  │  ├─ dogProfileRules.ts
 │  │  ├─ foodIngestionRules.ts
 │  │  ├─ foodRules.ts
 │  │  ├─ hospitalRules.ts
@@ -458,6 +487,7 @@ meong-care-mcp/
 │  │  ├─ riskPresentationRules.ts
 │  │  ├─ riskRules.ts
 │  │  ├─ symptomRules.ts
+│  │  ├─ trendSummaryRules.ts
 │  │  └─ vetShareCardRules.ts
 │  ├─ services/
 │  │  ├─ foodIngestionRecordService.ts
@@ -466,6 +496,7 @@ meong-care-mcp/
 │  │  ├─ publicDataHospitalService.ts
 │  │  └─ publicDataSymptomService.ts
 │  ├─ types/
+│  │  ├─ dogProfile.ts
 │  │  ├─ foodIngestionRecord.ts
 │  │  └─ photoRecord.ts
 │  ├─ utils/
