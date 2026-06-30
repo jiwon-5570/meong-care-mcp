@@ -1,6 +1,13 @@
 import type { DailyRiskLevel } from "./riskRules.js";
 import { buildDailyRiskPresentation, type RiskPresentation } from "./riskPresentationRules.js";
 import { buildVetShareCard, type VetShareCard } from "./vetShareCardRules.js";
+import {
+  buildToolChainGuide,
+  detectEmergencyHospitalSearchRequest,
+  detectHospitalSearchRequest,
+  type ToolChainGuide,
+} from "./toolChainGuideRules.js";
+import type { DogProfile } from "../types/dogProfile.js";
 
 export interface DailyCareInput {
   dogName: string;
@@ -36,6 +43,8 @@ export interface VetVisitSummaryInput {
   ownerConcern?: string;
   missingInfoQuestions?: string[];
   riskLevel?: DailyRiskLevel;
+  dogProfile?: DogProfile;
+  ownerRequestedHospitalSearch?: boolean;
 }
 
 export interface VetVisitSummaryResult {
@@ -52,6 +61,7 @@ export interface VetVisitSummaryResult {
   questionsForVet: string[];
   riskPresentation?: RiskPresentation;
   vetShareCard: VetShareCard;
+  toolChainGuide: ToolChainGuide;
 }
 
 export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendation {
@@ -207,6 +217,21 @@ export function createVetVisitSummary(input: VetVisitSummaryInput): VetVisitSumm
     missingInfoQuestions,
     questionsForVet,
   });
+  const ownerRequestedHospitalSearch = input.ownerRequestedHospitalSearch ??
+    detectHospitalSearchRequest(input.ownerConcern);
+  const toolChainGuide = buildToolChainGuide({
+    source: "vet_visit_summary",
+    riskLevel: input.riskLevel,
+    dogName: input.dogName,
+    ownerRequestedHospitalSearch,
+    ownerRequestedEmergencyHospital: ownerRequestedHospitalSearch &&
+      detectEmergencyHospitalSearchRequest(input.ownerConcern),
+    vetClinicName: input.dogProfile?.vetClinicName,
+    vetPhone: input.dogProfile?.vetPhone,
+    hasVetShareCard: true,
+    hasVetCallScript: false,
+    missingInfoQuestions,
+  });
 
   return {
     vetVisitSummary: summaryParts.join("\n"),
@@ -217,6 +242,7 @@ export function createVetVisitSummary(input: VetVisitSummaryInput): VetVisitSumm
     questionsForVet,
     ...(riskPresentation !== undefined ? { riskPresentation } : {}),
     vetShareCard,
+    toolChainGuide,
   };
 }
 

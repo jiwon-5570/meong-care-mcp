@@ -4,6 +4,7 @@ import type { PhotoFollowUpGuide, PhotoQuality } from "../logic/photoGuideRules.
 import type { RiskPresentation } from "../logic/riskPresentationRules.js";
 import type { VetShareCard } from "../logic/vetShareCardRules.js";
 import type { DogProfile, DogProfileUsage } from "./dogProfile.js";
+import type { ToolChainGuide } from "../logic/toolChainGuideRules.js";
 
 export type PhotoType = "stool" | "skin";
 export type AppetiteForPhoto = "normal" | "less" | "none" | "unknown";
@@ -23,6 +24,7 @@ export interface PhotoObservationInput {
   vomiting?: VomitingForPhoto;
   energy?: EnergyForPhoto;
   dogProfile?: DogProfile;
+  ownerRequestedHospitalSearch?: boolean;
 }
 
 export interface PhotoObservationAnalysis {
@@ -42,6 +44,7 @@ export interface PhotoObservationAnalysis {
   comparisonFocus: string[];
   photoRetakeRecommended: boolean;
   photoRecordUserMessage: string;
+  toolChainGuide: ToolChainGuide;
   photoLimitations: string;
   hospitalSearchGuide?: string;
 }

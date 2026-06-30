@@ -35,6 +35,9 @@ test("food safety rules include visible risk presentation for dangerous food", (
   assert.match(result.riskPresentation.riskLabel, /위험/);
   assert.match(result.riskPresentation.immediateAction, /동물병원/);
   assert.equal(result.riskPresentation.severityOrder, 4);
+  assertToolChainGuide(result.toolChainGuide);
+  assert.ok(result.toolChainGuide.recommendedNextTools.some((tool) => tool.toolName === "record_food_ingestion_event"));
+  assert.ok(!hasRecommendedTool(result.toolChainGuide, "find_nearby_animal_hospitals"));
 });
 
 test("daily status rules elevate urgent and contextual consultation cases", () => {
@@ -244,6 +247,59 @@ test("daily care note compares repeated signals with recent records", () => {
   assert.ok(["repeated", "worsening", "mixed"].includes(note.trendSummary.trendLabel));
   assert.match(note.userFriendlyGuide, /최근 기록|반복/);
   assert.match(note.kakaoActionText.whyThisRisk.join(" "), /최근 기록|반복|나빠진/);
+});
+
+test("daily care prioritizes existing vet without automatic hospital search", () => {
+  const note = createDailyCareNote({
+    dogProfile: {
+      dogName: "몽이",
+      ageYears: 6,
+      weightKg: 11,
+      vetClinicName: "몽이동물병원",
+      vetPhone: "051-000-0000",
+    },
+    ownerConcern: "오늘 밥을 거의 안 먹고 계속 누워 있어요. 병원 검색은 아직 하지 말고 기존 병원 연락부터 준비해줘.",
+  });
+
+  assertToolChainGuide(note.toolChainGuide);
+  assert.equal(note.toolChainGuide.vetContactGuide.mode, "existing_vet_first");
+  assert.equal(note.toolChainGuide.vetContactGuide.existingVetName, "몽이동물병원");
+  assert.equal(note.toolChainGuide.vetContactGuide.shouldAutoSearchHospital, false);
+  assert.ok(!hasRecommendedTool(note.toolChainGuide, "find_nearby_animal_hospitals"));
+  assert.match(`${note.kakaoActionText.chatFirstReply} ${note.kakaoActionText.vetCallScript}`, /몽이동물병원|평소 다니던/);
+});
+
+test("daily care recommends hospital search only after explicit request", () => {
+  const note = createDailyCareNote({
+    dogProfile: {
+      dogName: "몽이",
+      weightKg: 11,
+    },
+    ownerConcern: "몽이가 축 처져 있어요. 근처 동물병원 찾아줘.",
+    ownerRequestedHospitalSearch: true,
+  });
+  const hospitalTool = note.toolChainGuide.recommendedNextTools.find(
+    (tool) => tool.toolName === "find_nearby_animal_hospitals",
+  );
+
+  assert.ok(hospitalTool !== undefined);
+  assert.equal(hospitalTool.userConfirmationNeeded, true);
+  assert.ok(["medium", "high"].includes(hospitalTool.priority));
+  assert.equal(note.toolChainGuide.vetContactGuide.mode, "hospital_search_on_request");
+  assert.equal(note.toolChainGuide.vetContactGuide.shouldAutoSearchHospital, false);
+});
+
+test("daily care detects a region-based hospital search request from text", () => {
+  const note = createDailyCareNote({
+    dogProfile: {
+      dogName: "몽이",
+      weightKg: 11,
+    },
+    ownerConcern: "몽이가 축 처져 있어요. 부산 동물병원 찾아줘.",
+  });
+
+  assert.ok(hasRecommendedTool(note.toolChainGuide, "find_nearby_animal_hospitals"));
+  assert.equal(note.toolChainGuide.vetContactGuide.mode, "hospital_search_on_request");
 });
 
 test("daily trend reports higher risk than recent record", () => {
@@ -639,6 +695,69 @@ test("food ingestion event fills dog name and weight from dogProfile", () => {
   assert.match(analysis.kakaoActionText.vetCallScript, /몽이/);
 });
 
+test("dangerous food prioritizes existing vet without hospital search", () => {
+  const analysis = analyzeFoodIngestionEvent({
+    dogProfile: {
+      dogName: "몽이",
+      weightKg: 11,
+      vetClinicName: "몽이동물병원",
+      vetPhone: "051-000-0000",
+    },
+    foodName: "포도",
+    foodDetail: "샤인머스캣",
+    amount: "두 알",
+    eatenAt: "30분 전",
+    currentSymptoms: ["증상 없음"],
+  });
+
+  assert.equal(analysis.riskLevel, "danger");
+  assert.equal(analysis.toolChainGuide.vetContactGuide.mode, "existing_vet_first");
+  assert.ok(!hasRecommendedTool(analysis.toolChainGuide, "find_nearby_animal_hospitals"));
+  assert.match(analysis.toolChainGuide.vetContactGuide.primaryMessage, /평소 다니던 병원|기존 병원/);
+  assert.equal(typeof analysis.kakaoActionText.vetCallScript, "string");
+});
+
+test("dangerous food adds hospital search only when guardian asks", () => {
+  const analysis = analyzeFoodIngestionEvent({
+    dogProfile: {
+      dogName: "몽이",
+      weightKg: 11,
+    },
+    foodName: "포도",
+    foodDetail: "샤인머스캣",
+    amount: "두 알",
+    eatenAt: "30분 전",
+    currentSymptoms: ["증상 없음"],
+    ownerMemo: "근처 병원 찾아줘",
+  });
+
+  assert.equal(analysis.riskLevel, "danger");
+  assert.ok(hasRecommendedTool(analysis.toolChainGuide, "find_nearby_animal_hospitals"));
+  assert.equal(analysis.toolChainGuide.vetContactGuide.mode, "hospital_search_on_request");
+  assert.equal(analysis.toolChainGuide.vetContactGuide.shouldAutoSearchHospital, false);
+});
+
+test("urgent photo observation keeps existing-vet-first opt-in flow", () => {
+  const result = analyzePhotoObservation({
+    dogProfile: {
+      dogName: "몽이",
+      vetClinicName: "몽이동물병원",
+    },
+    photoType: "stool",
+    visualNotes: "피가 섞인 것처럼 붉은 변입니다.",
+    observedSigns: ["혈변 의심"],
+    appetite: "none",
+    vomiting: "none",
+    energy: "low",
+  });
+
+  assert.equal(result.riskLevel, "urgent");
+  assert.equal(result.toolChainGuide.vetContactGuide.mode, "existing_vet_first");
+  assert.ok(!hasRecommendedTool(result.toolChainGuide, "find_nearby_animal_hospitals"));
+  assert.equal(typeof result.photoFollowUpGuide, "object");
+  assert.equal(typeof result.vetShareCard, "object");
+});
+
 function assertKakaoActionText(kakaoActionText) {
   assert.equal(typeof kakaoActionText, "object");
   assert.equal(typeof kakaoActionText.chatFirstReply, "string");
@@ -672,6 +791,28 @@ function assertPhotoFollowUpGuide(result) {
     JSON.stringify(result.photoFollowUpGuide),
     /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|확실히 괜찮습니다|완치/,
   );
+}
+
+function assertToolChainGuide(toolChainGuide) {
+  assert.equal(typeof toolChainGuide, "object");
+  assert.equal(typeof toolChainGuide.currentStep, "string");
+  assert.ok(Array.isArray(toolChainGuide.recommendedNextTools));
+  assert.equal(typeof toolChainGuide.stopCondition, "string");
+  assert.equal(typeof toolChainGuide.userConfirmationNeeded, "boolean");
+  assert.equal(typeof toolChainGuide.vetContactGuide, "object");
+  assert.equal(toolChainGuide.vetContactGuide.shouldAutoSearchHospital, false);
+  assert.equal(typeof toolChainGuide.vetContactGuide.primaryMessage, "string");
+  assert.equal(typeof toolChainGuide.vetContactGuide.hospitalSearchOptInPrompt, "string");
+
+  const serialized = JSON.stringify(toolChainGuide);
+  assert.doesNotMatch(
+    serialized,
+    /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|확실히 괜찮습니다|완치/,
+  );
+}
+
+function hasRecommendedTool(toolChainGuide, toolName) {
+  return toolChainGuide.recommendedNextTools.some((tool) => tool.toolName === toolName);
 }
 
 function assertVetShareCardText(vetShareCard) {

@@ -3,6 +3,7 @@ import type { KakaoActionText } from "../logic/kakaoActionTextRules.js";
 import type { RiskPresentation } from "../logic/riskPresentationRules.js";
 import type { VetShareCard } from "../logic/vetShareCardRules.js";
 import type { DogProfile, DogProfileUsage } from "./dogProfile.js";
+import type { ToolChainGuide } from "../logic/toolChainGuideRules.js";
 
 export interface FoodIngestionEventInput {
   dogName?: string;
@@ -16,6 +17,7 @@ export interface FoodIngestionEventInput {
   currentSymptoms?: string[];
   ownerMemo?: string;
   dogProfile?: DogProfile;
+  ownerRequestedHospitalSearch?: boolean;
 }
 
 export interface FoodIngestionRecordedSummary {
@@ -42,6 +44,7 @@ export interface FoodIngestionEventResult {
   vetShareCard: VetShareCard;
   kakaoActionText: KakaoActionText;
   dogProfileUsage: DogProfileUsage;
+  toolChainGuide: ToolChainGuide;
   safetyNotice: string;
 }
 

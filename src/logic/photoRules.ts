@@ -9,6 +9,11 @@ import { buildPhotoFollowUpGuide, type PhotoFollowUpGuide } from "./photoGuideRu
 import { buildDailyRiskPresentation } from "./riskPresentationRules.js";
 import { buildVetShareCard } from "./vetShareCardRules.js";
 import type { DailyRiskLevel } from "./riskRules.js";
+import {
+  buildToolChainGuide,
+  detectEmergencyHospitalSearchRequest,
+  detectHospitalSearchRequest,
+} from "./toolChainGuideRules.js";
 import type { DogProfileUsage } from "../types/dogProfile.js";
 
 interface SignRule {
@@ -84,6 +89,26 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
     missingInfoQuestions,
     questionsForVet: buildPhotoQuestionsForVet(merged.photoType, riskLevel),
   });
+  const hospitalRequestText = [
+    merged.visualNotes,
+    ...(merged.observedSigns ?? []),
+    ...(merged.relatedSymptoms ?? []),
+  ].filter((value): value is string => value !== undefined).join(" ");
+  const ownerRequestedHospitalSearch = merged.ownerRequestedHospitalSearch ??
+    detectHospitalSearchRequest(hospitalRequestText);
+  const toolChainGuide = buildToolChainGuide({
+    source: "photo_observation",
+    riskLevel,
+    dogName: merged.dogName,
+    ownerRequestedHospitalSearch,
+    ownerRequestedEmergencyHospital: ownerRequestedHospitalSearch &&
+      detectEmergencyHospitalSearchRequest(hospitalRequestText),
+    vetClinicName: merged.dogProfile?.vetClinicName,
+    vetPhone: merged.dogProfile?.vetPhone,
+    hasVetShareCard: true,
+    hasVetCallScript: true,
+    missingInfoQuestions,
+  });
   const kakaoActionText = buildKakaoActionText({
     source: "photo_observation",
     dogName: merged.dogName,
@@ -100,6 +125,7 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
     nextPhotoGuide: photoFollowUpGuide.nextPhotoGuide,
     comparisonFocus: photoFollowUpGuide.comparisonFocus,
     photoType: merged.photoType,
+    vetContactGuide: toolChainGuide.vetContactGuide,
   });
 
   return {
@@ -119,6 +145,7 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
     comparisonFocus: photoFollowUpGuide.comparisonFocus,
     photoRetakeRecommended: photoFollowUpGuide.photoRetakeRecommended,
     photoRecordUserMessage: photoFollowUpGuide.photoRecordUserMessage,
+    toolChainGuide,
     photoLimitations:
       "MCP는 사진 원본을 분석하거나 진단하지 않습니다. 보호자 또는 호스트 AI가 제공한 관찰 텍스트를 기록 품질과 상담 준비 관점에서 구조화하며, 실제 상태가 심해 보이거나 증상이 지속되면 수의사 상담을 권장합니다.",
     hospitalSearchGuide:

@@ -147,6 +147,9 @@ function createMcpServer(): McpServer {
         foodName: z.string().min(1, "음식명을 입력해 주세요."),
         amount: z.string().optional(),
         dogWeightKg: z.number().positive().optional(),
+        dogProfile: dogProfileSchema,
+        ownerConcern: z.string().optional(),
+        ownerRequestedHospitalSearch: z.boolean().optional(),
       },
     },
     async (input) => {
@@ -191,6 +194,7 @@ function createMcpServer(): McpServer {
         riskPresentation: analysis.riskPresentation,
         dogProfileUsage: analysis.dogProfileUsage,
         trendSummary: analysis.trendSummary,
+        toolChainGuide: analysis.toolChainGuide,
         kakaoActionText: buildKakaoActionText({
           source: "daily_status",
           dogName: analysis.dogName,
@@ -202,6 +206,7 @@ function createMcpServer(): McpServer {
           ownerConcern: input.ownerConcern,
           dogProfileUsage: analysis.dogProfileUsage,
           trendSummary: analysis.trendSummary,
+          vetContactGuide: analysis.toolChainGuide.vetContactGuide,
         }),
         todayCareRecommendations: [
           care.dietManagement,
@@ -296,6 +301,8 @@ function createMcpServer(): McpServer {
         ownerConcern: z.string().optional(),
         missingInfoQuestions: z.array(z.string()).optional(),
         riskLevel: z.enum(["normal", "watch", "vet_consult", "urgent"]).optional(),
+        dogProfile: dogProfileSchema,
+        ownerRequestedHospitalSearch: z.boolean().optional(),
       },
     },
     async (input) => {
@@ -332,6 +339,7 @@ function createMcpServer(): McpServer {
         ownerMemo: z.string().optional(),
         dogProfile: dogProfileSchema,
         recentRecords: z.array(recentDailyStatusRecordSchema).optional(),
+        ownerRequestedHospitalSearch: z.boolean().optional(),
       },
     },
     async (input) => {
@@ -345,7 +353,7 @@ function createMcpServer(): McpServer {
     {
       title: "Find Nearby Animal Hospitals",
       description:
-        "Finds animal hospital candidates by region using public data or local fallback data in MeongCareNote MCP(멍케어노트 MCP).",
+        "Use this tool when the guardian explicitly asks for nearby, emergency, night, or region-based animal hospital candidates. MeongCareNote MCP(멍케어노트 MCP) prioritizes the guardian's existing veterinary clinic and does not automatically search hospitals without request.",
       annotations: {
         title: "Find Nearby Animal Hospitals",
         readOnlyHint: true,
@@ -437,6 +445,7 @@ function createMcpServer(): McpServer {
         vomiting: z.enum(["none", "once", "multiple", "unknown"]).optional(),
         energy: z.enum(["normal", "low", "very_low", "unknown"]).optional(),
         dogProfile: dogProfileSchema,
+        ownerRequestedHospitalSearch: z.boolean().optional(),
       },
     },
     async (input) => {
@@ -470,6 +479,7 @@ function createMcpServer(): McpServer {
         currentSymptoms: z.array(z.string()).optional(),
         ownerMemo: z.string().optional(),
         dogProfile: dogProfileSchema,
+        ownerRequestedHospitalSearch: z.boolean().optional(),
       },
     },
     async (input) => {
@@ -498,6 +508,7 @@ function dailyStatusSchema() {
     ownerConcern: z.string().optional(),
     dogProfile: dogProfileSchema,
     recentRecords: z.array(recentDailyStatusRecordSchema).optional(),
+    ownerRequestedHospitalSearch: z.boolean().optional(),
   };
 }
 

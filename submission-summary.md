@@ -27,6 +27,8 @@
 - 변/피부 사진은 PlayMCP 또는 카카오톡 Agent의 호스트 AI가 이해하고, MCP는 전달받은 `visualNotes`, `observedSigns`, `relatedSymptoms`만 기록하고 구조화합니다.
 - 캡처 읽기와 OCR은 호스트 AI가 담당하며, MCP는 전달받은 `chatText`만 분석해 병원 상담용 요약으로 정리합니다.
 - MCP 서버는 자체적으로 외부 생성형 AI API를 호출하지 않아 별도 AI API key 없이 실행할 수 있습니다.
+- 주요 응답의 `toolChainGuide`가 현재 단계와 다음 tool 후보를 구조화하되, 동물병원 검색은 보호자의 명시적 요청이 있을 때만 제안합니다.
+- `dogProfile`에 기존 병원 정보가 있으면 해당 병원 연락, `vetCallScript`, `vetShareCard.copyableText` 준비를 병원 검색보다 우선합니다.
 
 ## 5. MCP Tool 목록
 
@@ -36,7 +38,7 @@
 - `recommend_daily_care`: 위험도와 주요 증상을 바탕으로 식단, 간식, 물 섭취, 산책, 휴식을 추천합니다.
 - `create_vet_visit_summary`: 동물병원 상담 시 보여줄 수 있는 증상 요약문을 생성합니다.
 - `summarize_pet_chat_for_vet`: 캡처 이미지를 직접 OCR하지 않고, 호스트 Agent가 읽어낸 `chatText`를 바탕으로 반려견 상태와 병원 상담용 요약을 생성합니다.
-- `find_nearby_animal_hospitals`: 지역명 기반으로 동물병원 후보를 안내합니다.
+- `find_nearby_animal_hospitals`: 보호자가 근처·야간·응급·지역 기반 검색을 명시적으로 요청했을 때 동물병원 후보를 안내합니다.
 - `classify_pet_symptom`: 보호자의 자연어 증상 표현을 표준 증상명과 카테고리로 정리합니다.
 - `record_pet_photo_observation`: 사진 원본을 진단하거나 분석하지 않고, 보호자 또는 호스트 Agent가 제공한 관찰 텍스트를 기록해 이상 징후와 위험도를 구조화합니다.
 - `record_food_ingestion_event`: 위험할 수 있는 음식 섭취 상황을 병원 상담용으로 구조화해 기록합니다.
@@ -56,6 +58,8 @@
 멍케어노트 MCP는 사진을 직접 진단하지 않고, 보호자 또는 호스트 AI가 제공한 관찰 텍스트를 바탕으로 사진 기록 품질을 평가하고 다음 관찰 가이드를 제공합니다. 사용자는 변·피부 사진 기록 후 다음에 어떤 조건으로 다시 기록해야 하는지, 어떤 변화를 비교해야 하는지, 병원 상담 시 어떤 정보를 함께 전달해야 하는지 안내받을 수 있습니다. 이를 통해 단발성 사진 기록이 아니라 반복 관찰과 병원 상담 준비로 이어지는 실사용 흐름을 제공합니다.
 
 `photoFollowUpGuide`는 관찰 텍스트 충분도, 다음 촬영 방법, 후속 증상 관찰, 비교 포인트, 재기록 권장 여부를 구조화합니다. 사진 픽셀, URL, Base64 원문을 분석하거나 외부 생성형 AI API로 전송하지 않습니다.
+
+멍케어노트 MCP는 위험 상황에서 무조건 새로운 동물병원을 검색하도록 유도하지 않습니다. 보호자가 평소 다니는 병원 또는 `dogProfile`에 등록한 병원 연락을 먼저 안내하고, 병원 검색은 사용자가 명시적으로 요청한 경우에만 `find_nearby_animal_hospitals`로 이어집니다. 기본 행동은 `vetCallScript`와 `vetShareCard.copyableText`로 기존 병원 상담을 빠르게 준비하는 방식이며, `vetContactGuide.shouldAutoSearchHospital`은 항상 `false`입니다. 이를 통해 실제 보호자의 행동 순서에 맞는 Tool Chaining UX를 제공합니다.
 
 ## 6. 사용 데이터
 
@@ -104,6 +108,7 @@
 13. `record_pet_photo_observation`이 관찰 텍스트를 위험도와 병원 상담용 `vetShareCard`로 구조화합니다.
 14. 보호자가 “부산 진구 근처 동물병원 알려줘.”라고 입력합니다.
 15. `find_nearby_animal_hospitals`가 지역 기반 동물병원 후보와 방문 전 전화 확인 안내를 제공합니다.
+16. 보호자가 병원 검색을 요청하지 않은 상황에서는 `dogProfile`의 기존 병원 연락과 `vetCallScript`를 먼저 안내하고 병원 검색을 자동 제안하지 않습니다.
 
 ## 9. 향후 확장 계획
 

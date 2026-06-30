@@ -18,6 +18,12 @@ import {
 import type { RiskPresentation } from "./riskPresentationRules.js";
 import { buildKakaoActionText, type KakaoActionText } from "./kakaoActionTextRules.js";
 import type { TrendSummary } from "./trendSummaryRules.js";
+import {
+  buildToolChainGuide,
+  detectEmergencyHospitalSearchRequest,
+  detectHospitalSearchRequest,
+  type ToolChainGuide,
+} from "./toolChainGuideRules.js";
 import type { DogProfileUsage } from "../types/dogProfile.js";
 
 export type DailyCareNoteInput = DailyStatusInput;
@@ -33,6 +39,7 @@ export interface DailyCareNoteResult {
   riskPresentation: RiskPresentation;
   dogProfileUsage: DogProfileUsage;
   trendSummary: TrendSummary;
+  toolChainGuide: ToolChainGuide;
   userFriendlyGuide: string;
   todayCare: DailyCareRecommendation;
   vetConsultPreparation: VetVisitSummaryResult;
@@ -73,6 +80,23 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     ),
     missingInfoQuestions: analysis.missingInfoQuestions,
     riskLevel: analysis.riskLevel,
+    dogProfile: input.dogProfile,
+    ownerRequestedHospitalSearch: input.ownerRequestedHospitalSearch,
+  });
+  const ownerRequestedHospitalSearch = input.ownerRequestedHospitalSearch ??
+    detectHospitalSearchRequest(normalized.ownerConcern);
+  const toolChainGuide = buildToolChainGuide({
+    source: "daily_care_note",
+    riskLevel: analysis.riskLevel,
+    dogName: analysis.dogName,
+    ownerRequestedHospitalSearch,
+    ownerRequestedEmergencyHospital: ownerRequestedHospitalSearch &&
+      detectEmergencyHospitalSearchRequest(normalized.ownerConcern),
+    vetClinicName: input.dogProfile?.vetClinicName,
+    vetPhone: input.dogProfile?.vetPhone,
+    hasVetShareCard: true,
+    hasVetCallScript: true,
+    missingInfoQuestions: analysis.missingInfoQuestions,
   });
   const kakaoActionText = buildKakaoActionText({
     source: "daily_care_note",
@@ -86,6 +110,7 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     vetShareCard: vetConsultPreparation.vetShareCard,
     dogProfileUsage: analysis.dogProfileUsage,
     trendSummary: analysis.trendSummary,
+    vetContactGuide: toolChainGuide.vetContactGuide,
   });
 
   return {
@@ -99,6 +124,7 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     riskPresentation: analysis.riskPresentation,
     dogProfileUsage: analysis.dogProfileUsage,
     trendSummary: analysis.trendSummary,
+    toolChainGuide,
     userFriendlyGuide: buildUserFriendlyGuide(
       analysis.dogName,
       analysis.riskPresentation,

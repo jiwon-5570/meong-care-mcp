@@ -2,6 +2,7 @@ import type { FoodRiskLevel } from "./foodRules.js";
 import type { RiskPresentation } from "./riskPresentationRules.js";
 import type { DailyRiskLevel } from "./riskRules.js";
 import type { TrendSummary } from "./trendSummaryRules.js";
+import type { VetContactGuide } from "./toolChainGuideRules.js";
 import type { VetShareCard } from "./vetShareCardRules.js";
 import type { DogProfileUsage } from "../types/dogProfile.js";
 
@@ -36,6 +37,7 @@ export interface KakaoActionTextInput {
   nextPhotoGuide?: string[];
   comparisonFocus?: string[];
   photoType?: "stool" | "skin";
+  vetContactGuide?: VetContactGuide;
 }
 
 export interface KakaoActionText {
@@ -89,7 +91,11 @@ export function buildKakaoActionText(input: KakaoActionTextInput): KakaoActionTe
   return {
     chatFirstReply: sanitizeGeneratedText(
       input.source === "photo_observation" && cleanText(input.photoRecordUserMessage) !== undefined
-        ? buildPhotoChatFirstReply(riskText, input.photoRecordUserMessage)
+        ? buildPhotoChatFirstReply(
+          riskText,
+          input.photoRecordUserMessage,
+          input.vetContactGuide,
+        )
         : buildChatFirstReply(
           dogName,
           sourceLabel,
@@ -99,6 +105,7 @@ export function buildKakaoActionText(input: KakaoActionTextInput): KakaoActionTe
           input.familyContext,
           input.dogProfileUsage,
           input.trendSummary,
+          input.vetContactGuide,
         ),
     ),
     familyShareText: sanitizeGeneratedText(
@@ -134,9 +141,13 @@ export function buildKakaoActionText(input: KakaoActionTextInput): KakaoActionTe
 function buildPhotoChatFirstReply(
   riskText: RiskText,
   photoRecordUserMessage: string | undefined,
+  vetContactGuide: VetContactGuide | undefined,
 ): string {
   const messageLines = cleanText(photoRecordUserMessage)?.split("\n") ?? [];
-  return [riskText.badge, ...messageLines].slice(0, 7).join("\n");
+  const contactLine = buildVetContactLine(vetContactGuide);
+  return [riskText.badge, ...messageLines, ...(contactLine !== undefined ? [contactLine] : [])]
+    .slice(0, 7)
+    .join("\n");
 }
 
 function buildChatFirstReply(
@@ -148,6 +159,7 @@ function buildChatFirstReply(
   familyContext: string | null | undefined,
   dogProfileUsage: DogProfileUsage | undefined,
   trendSummary: TrendSummary | undefined,
+  vetContactGuide: VetContactGuide | undefined,
 ): string {
   const lines = [
     riskText.badge,
@@ -168,11 +180,21 @@ function buildChatFirstReply(
   lines.push(focusText);
   lines.push(`바로 할 일: ${riskText.immediateAction}`);
 
+  const contactLine = buildVetContactLine(vetContactGuide);
+  if (contactLine !== undefined) {
+    lines.push(contactLine);
+  }
+
   if (missingInfoQuestions.length > 0) {
     lines.push(`추가 확인: ${truncate(missingInfoQuestions[0], 110)}`);
   }
 
   return lines.slice(0, 7).join("\n");
+}
+
+function buildVetContactLine(vetContactGuide: VetContactGuide | undefined): string | undefined {
+  if (vetContactGuide === undefined) return undefined;
+  return `병원 안내: ${vetContactGuide.primaryMessage} ${vetContactGuide.hospitalSearchOptInPrompt}`;
 }
 
 function buildFamilyShareText(

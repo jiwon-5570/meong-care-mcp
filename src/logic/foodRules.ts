@@ -1,4 +1,11 @@
 import { buildFoodRiskPresentation, type RiskPresentation } from "./riskPresentationRules.js";
+import {
+  buildToolChainGuide,
+  detectEmergencyHospitalSearchRequest,
+  detectHospitalSearchRequest,
+  type ToolChainGuide,
+} from "./toolChainGuideRules.js";
+import type { DogProfile } from "../types/dogProfile.js";
 
 export type FoodRiskLevel = "safe" | "caution" | "danger" | "unknown";
 
@@ -6,6 +13,9 @@ export interface FoodSafetyInput {
   foodName: string;
   amount?: string;
   dogWeightKg?: number;
+  dogProfile?: DogProfile;
+  ownerConcern?: string;
+  ownerRequestedHospitalSearch?: boolean;
 }
 
 export interface FoodSafetyResult {
@@ -15,6 +25,7 @@ export interface FoodSafetyResult {
   riskLevel: FoodRiskLevel;
   guardianActions: string[];
   riskPresentation: RiskPresentation;
+  toolChainGuide: ToolChainGuide;
 }
 
 interface FoodRule {
@@ -238,6 +249,9 @@ function buildFoodSafetyResult(
   riskLevel: FoodRiskLevel,
   guardianActions: string[],
 ): FoodSafetyResult {
+  const ownerRequestedHospitalSearch = input.ownerRequestedHospitalSearch ??
+    detectHospitalSearchRequest(input.ownerConcern);
+
   return {
     foodName: input.foodName,
     amount: input.amount ?? "미입력",
@@ -245,6 +259,17 @@ function buildFoodSafetyResult(
     riskLevel,
     guardianActions,
     riskPresentation: buildFoodRiskPresentation(riskLevel, input.foodName, guardianActions),
+    toolChainGuide: buildToolChainGuide({
+      source: "food_safety",
+      foodRiskLevel: riskLevel,
+      ownerRequestedHospitalSearch,
+      ownerRequestedEmergencyHospital: ownerRequestedHospitalSearch &&
+        detectEmergencyHospitalSearchRequest(input.ownerConcern),
+      vetClinicName: input.dogProfile?.vetClinicName,
+      vetPhone: input.dogProfile?.vetPhone,
+      hasVetShareCard: false,
+      hasVetCallScript: false,
+    }),
   };
 }
 

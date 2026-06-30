@@ -52,6 +52,7 @@ export async function recordFoodIngestionEvent(
     vetShareCard: analysis.vetShareCard,
     kakaoActionText: analysis.kakaoActionText,
     dogProfileUsage: analysis.dogProfileUsage,
+    toolChainGuide: analysis.toolChainGuide,
     safetyNotice: SAFETY_MESSAGE,
   };
 }

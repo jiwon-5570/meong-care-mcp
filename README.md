@@ -100,6 +100,23 @@
 
 이 기능은 사진을 판독하거나 질병을 진단하는 기능이 아닙니다. 보호자 또는 호스트 AI가 제공한 `visualNotes`, `observedSigns`, `relatedSymptoms`를 병원 상담과 반복 관찰에 도움이 되도록 구조화합니다. `imageBase64` 원문 미저장 정책도 그대로 유지됩니다.
 
+## Tool Chaining 원칙
+
+멍케어노트 MCP의 주요 응답은 `toolChainGuide`를 포함해 호스트 AI가 현재 단계와 다음 작업 후보를 구분할 수 있게 합니다. 단, 동물병원 검색은 자동 실행하거나 위험도만으로 기본 추천하지 않습니다.
+
+- 적용 tool: `check_food_safety`, `analyze_daily_status`, `create_daily_care_note`, `create_vet_visit_summary`, `summarize_pet_chat_for_vet`, `record_pet_photo_observation`, `record_food_ingestion_event`
+- `currentStep`: 현재 완료된 기록 또는 분석 단계
+- `recommendedNextTools`: 다음에 사용할 수 있는 tool, 이유, 실행 조건, 우선순위, 사용자 확인 필요 여부
+- `vetContactGuide`: 기존 병원 우선 연락 방법과 병원 검색 opt-in 문구
+- `stopCondition`: 추가 tool 호출을 멈추고 상담 또는 관찰로 전환할 조건
+- `userConfirmationNeeded`: 다음 단계 전 보호자 확인 필요 여부
+
+### 기존 병원 우선 원칙
+
+`dogProfile.vetClinicName` 또는 `dogProfile.vetPhone`이 있으면 평소 다니던 병원 연락을 첫 단계로 안내합니다. 기존 병원 정보가 없으면 보호자가 평소 이용하거나 신뢰하는 병원에 먼저 연락하도록 안내합니다. 위험도가 높아도 병원 검색을 자동 추천하지 않으며 `vetContactGuide.shouldAutoSearchHospital`은 항상 `false`입니다.
+
+`find_nearby_animal_hospitals`는 보호자가 “근처 병원 찾아줘”, “야간 병원 알려줘”처럼 병원 검색을 명시적으로 요청했을 때만 `recommendedNextTools`에 포함됩니다. 실제 검색 전에는 지역 등 필요한 정보를 확인하며 `userConfirmationNeeded`는 `true`입니다.
+
 ## MCP Tool 목록
 
 | Tool | 역할 |
@@ -110,7 +127,7 @@
 | `recommend_daily_care` | 위험도와 주요 증상을 바탕으로 오늘의 식단, 물 섭취, 산책, 휴식 관리 행동을 추천합니다. |
 | `create_vet_visit_summary` | 동물병원 상담 시 보여줄 수 있는 증상 요약문과 질문 목록을 생성합니다. |
 | `summarize_pet_chat_for_vet` | 호스트 Agent가 대화 또는 캡처에서 읽어낸 `chatText`를 바탕으로 반려견 상태를 정리하고 동물병원 상담용 요약을 생성합니다. MCP는 카카오톡을 조회하거나 캡처를 직접 OCR하지 않습니다. |
-| `find_nearby_animal_hospitals` | 지역명 기반으로 동물병원 후보를 안내합니다. 공공데이터 API 또는 로컬 샘플 데이터를 사용합니다. |
+| `find_nearby_animal_hospitals` | 보호자가 근처·야간·응급·지역 기반 병원 검색을 명시적으로 요청했을 때 동물병원 후보를 안내합니다. 기존 병원 정보가 있으면 해당 병원 연락을 우선합니다. |
 | `classify_pet_symptom` | 보호자의 자연어 증상 표현을 증상명, 카테고리, 정규화된 표현으로 정리합니다. |
 | `record_pet_photo_observation` | 사진 원본을 진단하거나 분석하지 않고, 보호자 또는 호스트 Agent가 제공한 관찰 텍스트를 기록해 이상 징후와 위험도를 구조화합니다. |
 | `record_food_ingestion_event` | 위험할 수 있는 음식 섭취 상황을 구조화해 기록하고 병원 상담용 요약을 생성합니다. |
@@ -404,7 +421,7 @@
 
 ### `find_nearby_animal_hospitals`
 
-지역명 기반으로 동물병원 후보를 안내합니다.
+보호자가 병원 검색을 명시적으로 요청했을 때 지역명 기반 동물병원 후보를 안내합니다. 위험도가 높다는 이유만으로 자동 호출하지 않으며, `dogProfile`에 기존 병원 정보가 있으면 해당 병원 연락 안내를 우선합니다.
 
 입력:
 
@@ -509,6 +526,7 @@ meong-care-mcp/
 │  │  ├─ riskPresentationRules.ts
 │  │  ├─ riskRules.ts
 │  │  ├─ symptomRules.ts
+│  │  ├─ toolChainGuideRules.ts
 │  │  ├─ trendSummaryRules.ts
 │  │  └─ vetShareCardRules.ts
 │  ├─ services/

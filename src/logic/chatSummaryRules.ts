@@ -3,6 +3,12 @@ import { mergeDogProfile } from "./dogProfileRules.js";
 import { buildKakaoActionText, type KakaoActionText } from "./kakaoActionTextRules.js";
 import { buildDailyRiskPresentation, type RiskPresentation } from "./riskPresentationRules.js";
 import { buildTrendSummary, type RecentDailyStatusRecord, type TrendSummary } from "./trendSummaryRules.js";
+import {
+  buildToolChainGuide,
+  detectEmergencyHospitalSearchRequest,
+  detectHospitalSearchRequest,
+  type ToolChainGuide,
+} from "./toolChainGuideRules.js";
 import { buildVetShareCard, type VetShareCard } from "./vetShareCardRules.js";
 import type { DogProfile, DogProfileUsage } from "../types/dogProfile.js";
 import type {
@@ -29,6 +35,7 @@ export interface PetChatSummaryInput {
   ownerMemo?: string;
   dogProfile?: DogProfile;
   recentRecords?: RecentDailyStatusRecord[];
+  ownerRequestedHospitalSearch?: boolean;
 }
 
 export interface PetChatSummaryResult {
@@ -50,6 +57,7 @@ export interface PetChatSummaryResult {
   missingInfoQuestions: string[];
   dogProfileUsage: DogProfileUsage;
   trendSummary: TrendSummary;
+  toolChainGuide: ToolChainGuide;
   vetVisitSummary: string;
   vetShareCard: VetShareCard;
   kakaoActionText: KakaoActionText;
@@ -141,6 +149,22 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
     questionsForVet,
     privacyNote: PRIVACY_NOTICE,
   });
+  const hospitalRequestText = `${merged.chatText} ${merged.ownerMemo ?? ""}`;
+  const ownerRequestedHospitalSearch = merged.ownerRequestedHospitalSearch ??
+    detectHospitalSearchRequest(hospitalRequestText);
+  const toolChainGuide = buildToolChainGuide({
+    source: "chat_summary",
+    riskLevel: risk.riskLevel,
+    dogName: merged.dogName,
+    ownerRequestedHospitalSearch,
+    ownerRequestedEmergencyHospital: ownerRequestedHospitalSearch &&
+      detectEmergencyHospitalSearchRequest(hospitalRequestText),
+    vetClinicName: merged.dogProfile?.vetClinicName,
+    vetPhone: merged.dogProfile?.vetPhone,
+    hasVetShareCard: true,
+    hasVetCallScript: true,
+    missingInfoQuestions,
+  });
   const kakaoActionText = buildKakaoActionText({
     source: "chat_summary",
     dogName: merged.dogName,
@@ -157,6 +181,7 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
     vetShareCard,
     dogProfileUsage: merged.dogProfileUsage,
     trendSummary,
+    vetContactGuide: toolChainGuide.vetContactGuide,
   });
 
   return {
@@ -178,6 +203,7 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
     missingInfoQuestions,
     dogProfileUsage: merged.dogProfileUsage,
     trendSummary,
+    toolChainGuide,
     vetVisitSummary: buildVetVisitSummary(
       merged,
       signals,

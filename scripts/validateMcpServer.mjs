@@ -31,6 +31,15 @@ const KAKAO_ACTION_REQUIRED_TOOLS = new Set([
   "record_food_ingestion_event",
   "record_pet_photo_observation",
 ]);
+const TOOL_CHAIN_REQUIRED_TOOLS = new Set([
+  "check_food_safety",
+  "analyze_daily_status",
+  "create_daily_care_note",
+  "create_vet_visit_summary",
+  "summarize_pet_chat_for_vet",
+  "record_pet_photo_observation",
+  "record_food_ingestion_event",
+]);
 
 const photoRecordsPath = path.join(tmpdir(), `meong-photo-records-${Date.now()}.json`);
 const foodRecordsPath = path.join(tmpdir(), `meong-food-records-${Date.now()}.json`);
@@ -54,6 +63,7 @@ const toolCases = [
         JSON.stringify(payload).includes("빠른 동물병원 상담 권장"),
         "check_food_safety should include fast vet consultation guidance for grape.",
       );
+      assert(!hasRecommendedTool(payload, "find_nearby_animal_hospitals"), "check_food_safety must not auto-recommend hospital search.");
     },
   },
   {
@@ -241,6 +251,7 @@ const toolCases = [
     assert: (payload) => {
       assert(typeof payload.vetVisitSummary === "string", "create_vet_visit_summary should include vetVisitSummary.");
       assert(typeof payload.vetShareCard?.copyableText === "string", "create_vet_visit_summary should include vetShareCard.");
+      assert(!hasRecommendedTool(payload, "find_nearby_animal_hospitals"), "create_vet_visit_summary must not auto-recommend hospital search.");
     },
   },
   {
@@ -264,6 +275,7 @@ const toolCases = [
       assert(typeof payload.riskPresentation?.riskBadge === "string", "summarize_pet_chat_for_vet should include riskPresentation.");
       assert(typeof payload.kakaoActionText?.vetCallScript === "string", "summarize_pet_chat_for_vet should include kakaoActionText.");
       assert(payload.dogProfileUsage?.applied === true, "summarize_pet_chat_for_vet should apply dogProfile.");
+      assert(!hasRecommendedTool(payload, "find_nearby_animal_hospitals"), "summarize_pet_chat_for_vet must not auto-recommend hospital search.");
       assert(
         ["watch", "vet_consult"].includes(payload.riskLevel),
         "summarize_pet_chat_for_vet should classify demo chat as watch or vet_consult.",
@@ -325,6 +337,7 @@ const toolCases = [
       assert(Array.isArray(payload.comparisonFocus), "record_pet_photo_observation should include comparisonFocus.");
       assert(typeof payload.photoRetakeRecommended === "boolean", "record_pet_photo_observation should include photoRetakeRecommended.");
       assert(typeof payload.photoRecordUserMessage === "string", "record_pet_photo_observation should include photoRecordUserMessage.");
+      assert(!hasRecommendedTool(payload, "find_nearby_animal_hospitals"), "record_pet_photo_observation must not auto-recommend hospital search.");
     },
   },
   {
@@ -358,6 +371,23 @@ const toolCases = [
         "record_food_ingestion_event should include fast vet consultation guidance for danger.",
       );
       assert(typeof payload.safetyNotice === "string", "record_food_ingestion_event should include safetyNotice.");
+      assert(!hasRecommendedTool(payload, "find_nearby_animal_hospitals"), "record_food_ingestion_event must not auto-recommend hospital search.");
+    },
+  },
+  {
+    name: "create_daily_care_note",
+    args: {
+      dogProfile: {
+        dogName: "몽이",
+        weightKg: 11,
+      },
+      ownerConcern: "몽이가 축 처져 있어요. 부산 진구 근처 동물병원 찾아줘.",
+      ownerRequestedHospitalSearch: true,
+    },
+    assert: (payload) => {
+      assert(hasRecommendedTool(payload, "find_nearby_animal_hospitals"), "Explicit hospital search should recommend find_nearby_animal_hospitals.");
+      assert(payload.toolChainGuide?.vetContactGuide?.mode === "hospital_search_on_request", "Explicit hospital search should use hospital_search_on_request mode.");
+      assert(payload.toolChainGuide?.vetContactGuide?.shouldAutoSearchHospital === false, "Hospital search must still require opt-in confirmation.");
     },
   },
 ];
@@ -586,6 +616,10 @@ function validateToolPayload(toolName, payload) {
     assert(payload.kakaoActionText !== undefined, `${toolName} must include kakaoActionText.`);
   }
 
+  if (TOOL_CHAIN_REQUIRED_TOOLS.has(toolName)) {
+    assert(payload.toolChainGuide !== undefined, `${toolName} must include toolChainGuide.`);
+  }
+
   const serialized = JSON.stringify(payload);
   assert(
     payload.safetyMessage.includes(EXPECTED_SAFETY_MESSAGE_PART),
@@ -720,6 +754,63 @@ function validateToolPayload(toolName, payload) {
     );
   }
 
+  if (payload.toolChainGuide !== undefined) {
+    assert(
+      typeof payload.toolChainGuide === "object" && payload.toolChainGuide !== null,
+      `${toolName} toolChainGuide must be object.`,
+    );
+    assert(
+      typeof payload.toolChainGuide.currentStep === "string",
+      `${toolName} toolChainGuide.currentStep is required.`,
+    );
+    assert(
+      Array.isArray(payload.toolChainGuide.recommendedNextTools),
+      `${toolName} recommendedNextTools must be array.`,
+    );
+    assert(
+      typeof payload.toolChainGuide.stopCondition === "string",
+      `${toolName} stopCondition is required.`,
+    );
+    assert(
+      typeof payload.toolChainGuide.userConfirmationNeeded === "boolean",
+      `${toolName} userConfirmationNeeded must be boolean.`,
+    );
+
+    if (payload.toolChainGuide.vetContactGuide !== undefined) {
+      assert(
+        typeof payload.toolChainGuide.vetContactGuide === "object" &&
+          payload.toolChainGuide.vetContactGuide !== null,
+        `${toolName} vetContactGuide must be object.`,
+      );
+      assert(
+        payload.toolChainGuide.vetContactGuide.shouldAutoSearchHospital === false,
+        `${toolName} shouldAutoSearchHospital must always be false.`,
+      );
+      assert(
+        typeof payload.toolChainGuide.vetContactGuide.primaryMessage === "string",
+        `${toolName} vetContactGuide.primaryMessage is required.`,
+      );
+      assert(
+        typeof payload.toolChainGuide.vetContactGuide.hospitalSearchOptInPrompt === "string",
+        `${toolName} hospitalSearchOptInPrompt is required.`,
+      );
+    }
+
+    for (const nextTool of payload.toolChainGuide.recommendedNextTools) {
+      assert(typeof nextTool.toolName === "string", `${toolName} nextTool.toolName is required.`);
+      assert(typeof nextTool.reason === "string", `${toolName} nextTool.reason is required.`);
+      assert(typeof nextTool.when === "string", `${toolName} nextTool.when is required.`);
+      assert(
+        ["low", "medium", "high"].includes(nextTool.priority),
+        `${toolName} nextTool.priority is invalid.`,
+      );
+      assert(
+        typeof nextTool.userConfirmationNeeded === "boolean",
+        `${toolName} nextTool.userConfirmationNeeded is required.`,
+      );
+    }
+  }
+
   if (typeof payload.riskLevel === "string") {
     assert(
       typeof payload.riskPresentation === "object" && payload.riskPresentation !== null,
@@ -771,6 +862,10 @@ async function validateRecordFiles() {
   assert(Array.isArray(foodRecords) && foodRecords.length === 1, "Food ingestion validation file should contain one record.");
   assert(photoRecords[0].imageBase64Preview === "[base64 omitted]", "Photo record should omit full base64 content.");
   assert(foodRecords[0].imageBase64 === null, "Food ingestion record should not store missing base64 content.");
+}
+
+function hasRecommendedTool(payload, toolName) {
+  return payload.toolChainGuide?.recommendedNextTools?.some((tool) => tool.toolName === toolName) === true;
 }
 
 function assert(condition, message) {

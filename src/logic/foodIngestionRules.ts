@@ -2,6 +2,12 @@ import { checkFoodSafety, type FoodRiskLevel } from "./foodRules.js";
 import { mergeDogProfile } from "./dogProfileRules.js";
 import { buildKakaoActionText, type KakaoActionText } from "./kakaoActionTextRules.js";
 import type { RiskPresentation } from "./riskPresentationRules.js";
+import {
+  buildToolChainGuide,
+  detectEmergencyHospitalSearchRequest,
+  detectHospitalSearchRequest,
+  type ToolChainGuide,
+} from "./toolChainGuideRules.js";
 import { buildVetShareCard, type VetShareCard } from "./vetShareCardRules.js";
 import type {
   FoodIngestionEventInput,
@@ -19,6 +25,7 @@ export interface FoodIngestionAnalysis {
   vetShareCard: VetShareCard;
   kakaoActionText: KakaoActionText;
   dogProfileUsage: DogProfileUsage;
+  toolChainGuide: ToolChainGuide;
 }
 
 export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodIngestionAnalysis {
@@ -50,6 +57,21 @@ export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodI
     missingInfoQuestions,
     questionsForVet: buildFoodIngestionQuestionsForVet(foodSafety.riskLevel),
   });
+  const ownerRequestedHospitalSearch = merged.ownerRequestedHospitalSearch ??
+    detectHospitalSearchRequest(merged.ownerMemo);
+  const toolChainGuide = buildToolChainGuide({
+    source: "food_ingestion",
+    foodRiskLevel: foodSafety.riskLevel,
+    dogName: recordedSummary.dogName,
+    ownerRequestedHospitalSearch,
+    ownerRequestedEmergencyHospital: ownerRequestedHospitalSearch &&
+      detectEmergencyHospitalSearchRequest(merged.ownerMemo),
+    vetClinicName: merged.dogProfile?.vetClinicName,
+    vetPhone: merged.dogProfile?.vetPhone,
+    hasVetShareCard: true,
+    hasVetCallScript: true,
+    missingInfoQuestions,
+  });
   const kakaoActionText = buildKakaoActionText({
     source: "food_ingestion",
     dogName: recordedSummary.dogName,
@@ -64,6 +86,7 @@ export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodI
     ownerConcern: recordedSummary.ownerMemo,
     vetShareCard,
     dogProfileUsage: merged.dogProfileUsage,
+    vetContactGuide: toolChainGuide.vetContactGuide,
   });
 
   return {
@@ -76,6 +99,7 @@ export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodI
     vetShareCard,
     kakaoActionText,
     dogProfileUsage: merged.dogProfileUsage,
+    toolChainGuide,
   };
 }
 
