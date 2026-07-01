@@ -8,6 +8,7 @@ import type {
 
 interface SymptomServiceConfig {
   apiUrl?: string;
+  serviceKey?: string;
   usePublicDataApi: boolean;
 }
 
@@ -23,12 +24,29 @@ const SAMPLE_DATA_PATHS = [
   path.join(process.cwd(), "dist", "data", "symptomDictionary.sample.json"),
 ];
 
+const SHORT_STANDALONE_SYMPTOMS = new Set([
+  "구토",
+  "설사",
+  "혈변",
+  "기침",
+  "발열",
+  "경련",
+  "탈모",
+  "부종",
+  "통증",
+  "변비",
+  "황달",
+  "콧물",
+  "혈뇨",
+  "빈뇨",
+]);
+
 export async function loadSymptomDictionary(): Promise<SymptomDictionaryLoadResult> {
   const config = readSymptomServiceConfig();
 
   if (config.usePublicDataApi && config.apiUrl !== undefined) {
     try {
-      const dictionary = await fetchPublicSymptomDictionary(config.apiUrl);
+      const dictionary = await fetchPublicSymptomDictionary(config.apiUrl, config.serviceKey);
 
       if (dictionary.length > 0) {
         return {
@@ -37,6 +55,8 @@ export async function loadSymptomDictionary(): Promise<SymptomDictionaryLoadResu
           dataNotice: "공공데이터 API 조회 결과를 기준으로 증상 표현을 정리합니다.",
         };
       }
+
+      throw new Error("Public symptom API returned no valid symptom entries.");
     } catch {
       return {
         dictionary: await loadLocalSymptomDictionary(),
@@ -59,6 +79,26 @@ export function normalizeSymptomDictionaryItem(rawItem: unknown): SymptomDiction
 
   if (item === undefined) {
     return undefined;
+  }
+
+  const publicSymptomName = pickString(item, ["증상명"]);
+  const publicCategory = pickString(item, ["증상분류 한글"]);
+
+  if (publicSymptomName !== undefined && publicCategory !== undefined) {
+    const split = splitKeywords(publicSymptomName);
+    const safeKeywords = split.filter(isSafePublicKeyword);
+    const keywords = safeKeywords.length > 0 ? safeKeywords : [publicSymptomName];
+
+    if (keywords.length === 0) {
+      return undefined;
+    }
+
+    return {
+      canonicalSymptom: keywords[0],
+      category: publicCategory,
+      normalizedSymptom: publicSymptomName,
+      keywords,
+    };
   }
 
   const canonicalSymptom = pickString(item, ["canonicalSymptom", "symptomName", "name", "증상명"]);
@@ -88,8 +128,24 @@ export function normalizeSymptomDictionaryItem(rawItem: unknown): SymptomDiction
   };
 }
 
-async function fetchPublicSymptomDictionary(apiUrl: string): Promise<SymptomDictionaryEntry[]> {
-  const response = await fetch(apiUrl);
+async function fetchPublicSymptomDictionary(
+  apiUrl: string,
+  serviceKey: string | undefined,
+): Promise<SymptomDictionaryEntry[]> {
+  const url = new URL(apiUrl);
+
+  setDefaultSearchParam(url, "page", "1");
+  setDefaultSearchParam(url, "perPage", "1000");
+  setDefaultSearchParam(url, "returnType", "JSON");
+
+  if (serviceKey !== undefined && !url.searchParams.has("serviceKey")) {
+    url.searchParams.set("serviceKey", serviceKey);
+  }
+
+  const response = await fetch(url, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(8_000),
+  });
 
   if (!response.ok) {
     throw new Error(`Public symptom API failed with ${response.status}`);
@@ -140,8 +196,15 @@ async function readFirstExistingFile(paths: string[]): Promise<string | undefine
 function readSymptomServiceConfig(): SymptomServiceConfig {
   return {
     apiUrl: optionalEnv("PUBLIC_DATA_SYMPTOM_API_URL"),
+    serviceKey: optionalEnv("PUBLIC_DATA_SERVICE_KEY"),
     usePublicDataApi: process.env.USE_SYMPTOM_PUBLIC_DATA === "true",
   };
+}
+
+function setDefaultSearchParam(url: URL, name: string, value: string): void {
+  if (!url.searchParams.has(name)) {
+    url.searchParams.set(name, value);
+  }
 }
 
 function extractCandidateItems(value: unknown): unknown[] {
@@ -214,6 +277,22 @@ function pickStringArray(record: Record<string, unknown>, keys: string[]): strin
   }
 
   return [];
+}
+
+function splitKeywords(value: string): string[] {
+  return Array.from(
+    new Set(
+      value
+        .split(/[,|;/]/)
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0),
+    ),
+  );
+}
+
+function isSafePublicKeyword(value: string): boolean {
+  const normalized = value.toLowerCase().replace(/[^가-힣a-z0-9]/g, "");
+  return normalized.length >= 3 || SHORT_STANDALONE_SYMPTOMS.has(normalized);
 }
 
 function optionalEnv(name: string): string | undefined {

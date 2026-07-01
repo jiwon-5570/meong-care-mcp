@@ -31,6 +31,7 @@
 - 카카오톡 첫 답변, 가족 공유문, 병원 전화 문장, 다음 입력 예시를 묶은 `kakaoActionText` 생성
 - 통합 일상 케어 노트 생성
 - 식단, 물 섭취, 산책, 휴식 관리 추천
+- 공공데이터 또는 로컬 샘플 기반 집밥 원료 영양성분 비교와 주의 기준 제공
 - 동물병원 상담용 증상 요약문 생성
 - 호스트 AI가 캡처에서 읽어낸 `chatText` 기반 병원 상담용 요약 생성
 - 지역 기반 동물병원 후보 안내
@@ -100,6 +101,31 @@
 
 이 기능은 사진을 판독하거나 질병을 진단하는 기능이 아닙니다. 보호자 또는 호스트 AI가 제공한 `visualNotes`, `observedSigns`, `relatedSymptoms`를 병원 상담과 반복 관찰에 도움이 되도록 구조화합니다. `imageBase64` 원문 미저장 정책도 그대로 유지됩니다.
 
+## 반려동물 집밥원료 영양성분 데이터 활용
+
+멍케어노트 MCP는 농사로/공공데이터 또는 로컬 시연용 샘플의 반려동물 집밥원료 영양성분을 활용해 원료 선택 기준과 주의점을 제공합니다. 완성 사료 제품이나 치료식을 제안하는 기능이 아니며, 보호자가 집밥 원료 또는 식단 보조 원료를 비교할 때 기록할 정보와 수의사 상담 질문을 정리합니다.
+
+적용 tool:
+
+- `create_daily_care_note`: 현재 식욕, 변, 구토, 피부 상태와 프로필을 바탕으로 `ingredientSelectionGuide`를 조건부 생성
+- `recommend_daily_care`: 상태 기반의 짧은 `dietIngredientHints` 제공
+- `check_food_safety`: 위험 음식 판단을 우선하고 일치 원료가 있으면 `ingredientNutritionSummary` 제공
+- `record_food_ingestion_event`: 실제 섭취 음식과 일치하는 원료 성분 요약을 기록하되 위험 음식 대응을 최우선으로 유지
+
+포함 정보:
+
+- 원료명, 원료 경로, 가공 형태, 원료가격
+- 수분, 단백질, 지방, 칼슘, 인, 탄수화물, 식이섬유, 나트륨, 칼륨 등 확인 가능한 영양성분
+- 비교 가능한 후보 `possibleIngredients`
+- 현재 상태에서 주의할 원료 `cautionIngredients`
+- 한 가지씩 소량으로 확인하는 `transitionGuide`
+- 수의사에게 확인할 `questionsForVet`
+- 가족 공유문 `familyShareText`
+
+`USE_PET_FOOD_PUBLIC_DATA=true`이고 `PUBLIC_DATA_PET_FOOD_API_URL`이 설정되면 API 호출을 시도합니다. 호출 실패, 파싱 실패, 결과 없음이면 `src/data/petFoodIngredients.sample.json`으로 fallback합니다. 로컬 파일은 기능 시연용 샘플이므로 실제 식단 변경 전 원본 데이터와 수의사 식이 상담으로 확인해야 합니다. 데이터 필드 구조는 [농사로 반려동물 집밥원료 공식 샘플](https://api.nongsaro.go.kr/sample/rest/feedRawMaterial/feedRawMaterial.jsp)을 참고했습니다.
+
+이 안내는 집밥 원료 선택 기준을 정리한 것이며 진단, 처방, 치료식 추천이 아닙니다. 기존 질환이 있거나 이상 증상이 지속되면 수의사와 식이 상담을 권장합니다.
+
 ## Tool Chaining 원칙
 
 멍케어노트 MCP의 주요 응답은 `toolChainGuide`를 포함해 호스트 AI가 현재 단계와 다음 작업 후보를 구분할 수 있게 합니다. 단, 동물병원 검색은 자동 실행하거나 위험도만으로 기본 추천하지 않습니다.
@@ -121,16 +147,16 @@
 
 | Tool | 역할 |
 | --- | --- |
-| `check_food_safety` | 음식명을 기준으로 `safe`, `caution`, `danger`, `unknown` 위험도를 분류하고 보호자 행동을 안내합니다. |
+| `check_food_safety` | 음식 위험도를 우선 분류하고 요청 시 일치하는 집밥 원료 영양성분을 별도 요약합니다. |
 | `analyze_daily_status` | 식욕, 변, 구토, 활동량, 증상 기간, 위험 음식 섭취 여부를 바탕으로 오늘 상태 위험도를 분류합니다. 입력이 부족하면 확인 질문과 임시 판단을 함께 제공합니다. |
-| `create_daily_care_note` | 오늘 상태 입력 한 번으로 위험도, 식단, 산책, 휴식, 관찰 항목, 병원 상담용 요약, 부족한 정보 질문을 함께 생성합니다. |
-| `recommend_daily_care` | 위험도와 주요 증상을 바탕으로 오늘의 식단, 물 섭취, 산책, 휴식 관리 행동을 추천합니다. |
+| `create_daily_care_note` | 오늘 상태 분석과 관리 행동을 생성하고 식단 관련 요청에는 원료 선택 기준을 조건부로 포함합니다. |
+| `recommend_daily_care` | 위험도와 주요 증상을 바탕으로 식단 원료 주의점, 물 섭취, 산책, 휴식 행동을 안내합니다. |
 | `create_vet_visit_summary` | 동물병원 상담 시 보여줄 수 있는 증상 요약문과 질문 목록을 생성합니다. |
 | `summarize_pet_chat_for_vet` | 호스트 Agent가 대화 또는 캡처에서 읽어낸 `chatText`를 바탕으로 반려견 상태를 정리하고 동물병원 상담용 요약을 생성합니다. MCP는 카카오톡을 조회하거나 캡처를 직접 OCR하지 않습니다. |
 | `find_nearby_animal_hospitals` | 보호자가 근처·야간·응급·지역 기반 병원 검색을 명시적으로 요청했을 때 동물병원 후보를 안내합니다. 기존 병원 정보가 있으면 해당 병원 연락을 우선합니다. |
 | `classify_pet_symptom` | 보호자의 자연어 증상 표현을 증상명, 카테고리, 정규화된 표현으로 정리합니다. |
 | `record_pet_photo_observation` | 사진 원본을 진단하거나 분석하지 않고, 보호자 또는 호스트 Agent가 제공한 관찰 텍스트를 기록해 이상 징후와 위험도를 구조화합니다. |
-| `record_food_ingestion_event` | 위험할 수 있는 음식 섭취 상황을 구조화해 기록하고 병원 상담용 요약을 생성합니다. |
+| `record_food_ingestion_event` | 음식 섭취 상황을 기록하고 위험도 우선 안내, 일치 원료 성분, 병원 상담용 요약을 생성합니다. |
 
 모든 tool은 PlayMCP 권장 metadata 규칙에 맞춰 `name`, `description`, `inputSchema`, `annotations`를 포함합니다.
 
@@ -313,6 +339,7 @@
 - 카카오톡에서 읽기 쉬운 보호자 안내문
 - 위험도 표시 구조
 - 오늘 식단/간식/물/산책/휴식 관리
+- 조건부 집밥 원료 선택 가이드 `ingredientSelectionGuide`
 - 관찰할 증상
 - 병원 상담용 요약
 - 병원 공유용 요약 카드 `vetShareCard`
@@ -330,6 +357,10 @@
 - `mainSymptoms: string[]`
 - `weightKg?: number`
 - `ageYears?: number`
+- `includeIngredientGuide?: boolean`
+- `ingredientGoal?: "normal_daily" | "sensitive_stomach" | "weight_control" | "senior" | "skin_coat" | "after_vet_advice"`
+- `requestedIngredientNames?: string[]`
+- `dogProfile?: object`
 
 출력:
 
@@ -339,6 +370,7 @@
 - 산책 강도
 - 휴식 권장
 - 관찰할 증상
+- 조건부 식단 원료 주의 문구 `dietIngredientHints`
 - 위험도 표시 구조
 - 안전 문구
 
@@ -510,6 +542,7 @@ meong-care-mcp/
 │  ├─ data/
 │  │  ├─ animalHospitals.sample.json
 │  │  ├─ foodIngestionRecords.json
+│  │  ├─ petFoodIngredients.sample.json
 │  │  ├─ photoRecords.json
 │  │  └─ symptomDictionary.sample.json
 │  ├─ logic/
@@ -520,6 +553,7 @@ meong-care-mcp/
 │  │  ├─ foodIngestionRules.ts
 │  │  ├─ foodRules.ts
 │  │  ├─ hospitalRules.ts
+│  │  ├─ ingredientSelectionRules.ts
 │  │  ├─ kakaoActionTextRules.ts
 │  │  ├─ photoGuideRules.ts
 │  │  ├─ photoRules.ts
@@ -532,12 +566,14 @@ meong-care-mcp/
 │  ├─ services/
 │  │  ├─ foodIngestionRecordService.ts
 │  │  ├─ jsonRecordStore.ts
+│  │  ├─ petFoodIngredientService.ts
 │  │  ├─ photoRecordService.ts
 │  │  ├─ publicDataHospitalService.ts
 │  │  └─ publicDataSymptomService.ts
 │  ├─ types/
 │  │  ├─ dogProfile.ts
 │  │  ├─ foodIngestionRecord.ts
+│  │  ├─ petFoodIngredient.ts
 │  │  └─ photoRecord.ts
 │  ├─ utils/
 │  │  └─ safetyMessage.ts
@@ -611,6 +647,7 @@ npm run validate
 - 안전 문구 포함 여부
 - 금지 의료 표현 포함 여부
 - base64 전체 저장 방지
+- 원료 선택 가이드와 영양 요약 구조
 
 ## Health Check
 
@@ -630,7 +667,7 @@ curl http://localhost:3000/health
 
 ## 환경 변수
 
-`.env`는 현재 Git 추적 대상입니다. 비밀키는 private 저장소 정책에 맞게 관리하세요.
+`.env`는 Git에 커밋하지 않습니다. 실제 API 키는 로컬 `.env` 또는 배포 환경의 secret으로만 관리합니다.
 
 ```env
 PORT=3000
@@ -639,8 +676,12 @@ PUBLIC_DATA_SERVICE_KEY=
 PUBLIC_DATA_ANIMAL_HOSPITAL_API_URL=https://apis.data.go.kr/1741000/animal_hospitals/info
 USE_PUBLIC_DATA_API=false
 
-PUBLIC_DATA_SYMPTOM_API_URL=
-USE_SYMPTOM_PUBLIC_DATA=false
+PUBLIC_DATA_SYMPTOM_API_URL=https://api.odcloud.kr/api/15050441/v1/uddi:cc7486db-c496-4497-8ade-e75a7b463406
+USE_SYMPTOM_PUBLIC_DATA=true
+
+USE_PET_FOOD_PUBLIC_DATA=false
+PUBLIC_DATA_PET_FOOD_API_URL=
+PUBLIC_DATA_PET_FOOD_SERVICE_KEY=
 
 PHOTO_RECORDS_PATH=src/data/photoRecords.json
 FOOD_INGESTION_RECORDS_PATH=src/data/foodIngestionRecords.json
@@ -652,8 +693,11 @@ FOOD_INGESTION_RECORDS_PATH=src/data/foodIngestionRecords.json
 - `PUBLIC_DATA_SERVICE_KEY`: 공공데이터포털 API 키입니다.
 - `PUBLIC_DATA_ANIMAL_HOSPITAL_API_URL`: 동물병원 API URL입니다.
 - `USE_PUBLIC_DATA_API`: `true`이면 공공데이터 API를 우선 사용합니다.
-- `PUBLIC_DATA_SYMPTOM_API_URL`: 증상 사전 API URL입니다. 현재는 미설정 시 로컬 샘플을 사용합니다.
-- `USE_SYMPTOM_PUBLIC_DATA`: `true`이면 증상 사전 API 사용을 시도합니다.
+- `PUBLIC_DATA_SYMPTOM_API_URL`: 한국과학기술정보연구원 동물질병 증상분류 API URL입니다.
+- `USE_SYMPTOM_PUBLIC_DATA`: `true`이면 `PUBLIC_DATA_SERVICE_KEY`로 증상분류 API를 호출하고, 실패하면 로컬 사전을 사용합니다.
+- `USE_PET_FOOD_PUBLIC_DATA`: `true`이면 집밥원료 공공데이터 API를 우선 사용하고 실패 시 로컬 샘플로 fallback합니다.
+- `PUBLIC_DATA_PET_FOOD_API_URL`: 농사로/공공데이터의 반려동물 집밥원료 API endpoint입니다.
+- `PUBLIC_DATA_PET_FOOD_SERVICE_KEY`: 집밥원료 API 전용 인증키이며, 비어 있으면 `PUBLIC_DATA_SERVICE_KEY`를 사용합니다.
 - `PHOTO_RECORDS_PATH`: 사진 기록 JSON 저장 경로입니다.
 - `FOOD_INGESTION_RECORDS_PATH`: 위험 음식 섭취 기록 JSON 저장 경로입니다.
 

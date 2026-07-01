@@ -17,6 +17,36 @@ import {
   buildMissingInfoQuestions,
 } from "../dist/logic/foodIngestionRules.js";
 import { SAFETY_MESSAGE, withSafetyMessage } from "../dist/utils/safetyMessage.js";
+import {
+  buildIngredientNutritionSummary,
+  buildIngredientSelectionGuide,
+  findMatchingIngredient,
+  shouldBuildIngredientSelectionGuide,
+} from "../dist/logic/ingredientSelectionRules.js";
+import {
+  loadPetFoodIngredients,
+  normalizePetFoodIngredient,
+  parsePetFoodResponse,
+} from "../dist/services/petFoodIngredientService.js";
+import { normalizeSymptomDictionaryItem } from "../dist/services/publicDataSymptomService.js";
+
+test("public symptom data maps official Korean fields into the MCP dictionary", () => {
+  assert.deepEqual(
+    normalizeSymptomDictionaryItem({
+      "증상명": "귀의 화농성, 점액성 분비물, 과도한 이구(귀밥), 악취",
+      "증상목록코드": "a003",
+      "증상분류 영어": "Acoustic",
+      "증상분류 한글": "청각기관 증상",
+      "증상코드": "a",
+    }),
+    {
+      canonicalSymptom: "귀의 화농성",
+      category: "청각기관 증상",
+      normalizedSymptom: "귀의 화농성, 점액성 분비물, 과도한 이구(귀밥), 악취",
+      keywords: ["귀의 화농성", "점액성 분비물", "과도한 이구(귀밥)"],
+    },
+  );
+});
 
 test("food safety rules classify high-risk and common foods", () => {
   assert.equal(checkFoodSafety({ foodName: "샤인머스캣 포도" }).riskLevel, "danger");
@@ -220,8 +250,8 @@ test("explicit daily status values take priority over dogProfile", () => {
   assert.doesNotMatch(analysis.missingInfoQuestions.join(" "), /몸무게/);
 });
 
-test("daily care note compares repeated signals with recent records", () => {
-  const note = createDailyCareNote({
+test("daily care note compares repeated signals with recent records", async () => {
+  const note = await createDailyCareNote({
     dogProfile: {
       dogName: "몽이",
       ageYears: 6,
@@ -249,8 +279,8 @@ test("daily care note compares repeated signals with recent records", () => {
   assert.match(note.kakaoActionText.whyThisRisk.join(" "), /최근 기록|반복|나빠진/);
 });
 
-test("daily care prioritizes existing vet without automatic hospital search", () => {
-  const note = createDailyCareNote({
+test("daily care prioritizes existing vet without automatic hospital search", async () => {
+  const note = await createDailyCareNote({
     dogProfile: {
       dogName: "몽이",
       ageYears: 6,
@@ -269,8 +299,8 @@ test("daily care prioritizes existing vet without automatic hospital search", ()
   assert.match(`${note.kakaoActionText.chatFirstReply} ${note.kakaoActionText.vetCallScript}`, /몽이동물병원|평소 다니던/);
 });
 
-test("daily care recommends hospital search only after explicit request", () => {
-  const note = createDailyCareNote({
+test("daily care recommends hospital search only after explicit request", async () => {
+  const note = await createDailyCareNote({
     dogProfile: {
       dogName: "몽이",
       weightKg: 11,
@@ -289,8 +319,8 @@ test("daily care recommends hospital search only after explicit request", () => 
   assert.equal(note.toolChainGuide.vetContactGuide.shouldAutoSearchHospital, false);
 });
 
-test("daily care detects a region-based hospital search request from text", () => {
-  const note = createDailyCareNote({
+test("daily care detects a region-based hospital search request from text", async () => {
+  const note = await createDailyCareNote({
     dogProfile: {
       dogName: "몽이",
       weightKg: 11,
@@ -325,8 +355,8 @@ test("daily trend reports higher risk than recent record", () => {
   assert.match(analysis.trendSummary.userMessage, /최근 기록/);
 });
 
-test("daily care note combines analysis, care guidance, and vet summary", () => {
-  const note = createDailyCareNote({
+test("daily care note combines analysis, care guidance, and vet summary", async () => {
+  const note = await createDailyCareNote({
     dogName: "몽이",
     ageYears: 6,
     weightKg: 11,
@@ -350,8 +380,8 @@ test("daily care note combines analysis, care guidance, and vet summary", () => 
   assert.ok(note.kakaoActionText.whyThisRisk.length >= 2);
 });
 
-test("daily care note handles incomplete concern with friendly guide", () => {
-  const note = createDailyCareNote({
+test("daily care note handles incomplete concern with friendly guide", async () => {
+  const note = await createDailyCareNote({
     ownerConcern: "우리 강아지가 밥을 안 먹고 계속 누워 있어요.",
   });
 
@@ -372,6 +402,158 @@ test("daily care note handles incomplete concern with friendly guide", () => {
 
   const serialized = JSON.stringify(note);
   assert.doesNotMatch(serialized, /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|정상 괜찮습니다|완치/);
+});
+
+test("pet food ingredient service normalizes paths and numeric strings", () => {
+  const ingredient = normalizePetFoodIngredient({
+    출처: "식품 DB",
+    원료: "농산물 > 당근 > 당근, 뿌리, 생것",
+    "원료가격(원/kg)": "5,075.000\n",
+    "수분(%)": "91.100",
+    "지방(%)": "0.130",
+  }, "public_data");
+
+  assert.equal(ingredient?.ingredientName, "당근");
+  assert.equal(ingredient?.category, "농산물");
+  assert.equal(ingredient?.subCategory, "당근");
+  assert.equal(ingredient?.partOrForm, "뿌리, 생것");
+  assert.equal(ingredient?.priceWonPerKg, 5075);
+  assert.equal(ingredient?.moisturePercent, 91.1);
+  assert.equal(shouldBuildIngredientSelectionGuide({
+    dogName: "몽이",
+    appetite: "normal",
+    stool: "normal",
+    vomiting: "none",
+    energy: "normal",
+  }), false);
+});
+
+test("pet food ingredient service parses official Nongsaro XML fields", () => {
+  const parsed = parsePetFoodResponse(`
+    <response>
+      <header><resultCode>00</resultCode><resultMsg>NORMAL SERVICE</resultMsg></header>
+      <body><items><item>
+        <originNm>식품 DB</originNm>
+        <feedClCodeNm>농산물 &gt; 당근</feedClCodeNm>
+        <feedNm>당근, 뿌리, 생것</feedNm>
+        <mtralPc>5075</mtralPc>
+        <dryMatter>8.9</dryMatter>
+        <mitrQy>91.1</mitrQy>
+        <protQy>1.02</protQy>
+        <fatQy>0.13</fatQy>
+      </item></items></body>
+    </response>
+  `, "text/xml;charset=UTF-8");
+  const item = parsed.response.body.items.item;
+  const ingredient = normalizePetFoodIngredient(item, "public_data");
+
+  assert.equal(ingredient?.ingredientName, "당근");
+  assert.equal(ingredient?.ingredientPath, "농산물 > 당근 > 당근, 뿌리, 생것");
+  assert.equal(ingredient?.originSource, "식품 DB");
+  assert.equal(ingredient?.priceWonPerKg, 5075);
+  assert.equal(ingredient?.proteinPercent, 1.02);
+  assert.equal(ingredient?.fatPercent, 0.13);
+});
+
+test("pet food ingredient service falls back when public API fails", async () => {
+  const previousUse = process.env.USE_PET_FOOD_PUBLIC_DATA;
+  const previousUrl = process.env.PUBLIC_DATA_PET_FOOD_API_URL;
+  const previousKey = process.env.PUBLIC_DATA_SERVICE_KEY;
+
+  try {
+    process.env.USE_PET_FOOD_PUBLIC_DATA = "true";
+    process.env.PUBLIC_DATA_PET_FOOD_API_URL = "http://127.0.0.1:1/pet-food";
+    delete process.env.PUBLIC_DATA_SERVICE_KEY;
+
+    const loaded = await loadPetFoodIngredients();
+    assert.ok(loaded.ingredients.length >= 10);
+    assert.match(loaded.dataNotice, /실패.*로컬|로컬.*샘플/);
+  } finally {
+    restoreEnv("USE_PET_FOOD_PUBLIC_DATA", previousUse);
+    restoreEnv("PUBLIC_DATA_PET_FOOD_API_URL", previousUrl);
+    restoreEnv("PUBLIC_DATA_SERVICE_KEY", previousKey);
+  }
+});
+
+test("daily care note conditionally includes ingredient selection guide", async () => {
+  const note = await createDailyCareNote({
+    dogProfile: {
+      dogName: "몽이",
+      ageYears: 6,
+      weightKg: 11,
+      usualFood: "닭고기 사료",
+    },
+    ownerConcern: "몽이가 오늘 밥을 반만 먹고 변이 묽어요. 집밥 재료는 어떤 기준으로 봐야 할까요?",
+    includeIngredientGuide: true,
+    ingredientGoal: "sensitive_stomach",
+  });
+
+  assert.equal(note.ingredientSelectionGuide?.mode, "daily_status_based_ingredient_guide");
+  assert.ok(Array.isArray(note.ingredientSelectionGuide?.possibleIngredients));
+  assert.ok(Array.isArray(note.ingredientSelectionGuide?.cautionIngredients));
+  assert.ok((note.ingredientSelectionGuide?.possibleIngredients.length ?? 0) >= 3);
+  assert.ok((note.ingredientSelectionGuide?.cautionIngredients.length ?? 0) >= 3);
+  assert.match(note.ingredientSelectionGuide?.recommendedCriteria.join(" ") ?? "", /새 원료|소량/);
+  assert.match(note.ingredientSelectionGuide?.avoidCriteria.join(" ") ?? "", /지방/);
+  assert.match(note.ingredientSelectionGuide?.safetyNote ?? "", /진단|처방|치료식 추천이 아닙니다/);
+  assert.match(note.ingredientSelectionGuide?.familyShareText ?? "", /몽이/);
+  assert.match(note.userFriendlyGuide, /식단 원료 가이드/);
+  assertIngredientGuideSafety(note.ingredientSelectionGuide);
+});
+
+test("ingredient selection compares requested carrot and cod", async () => {
+  const loaded = await loadPetFoodIngredients();
+  assert.ok(loaded.ingredients.length >= 10);
+
+  const guide = buildIngredientSelectionGuide({
+    dogName: "몽이",
+    stool: "soft",
+    requestedIngredientNames: ["당근", "대구"],
+    includeIngredientGuide: true,
+    dataNotice: loaded.dataNotice,
+  }, loaded.ingredients);
+  const candidates = [...guide.possibleIngredients, ...guide.cautionIngredients];
+
+  assert.equal(guide.mode, "ingredient_comparison");
+  assert.ok(candidates.some((candidate) => /당근/.test(candidate.ingredientName)));
+  assert.ok(candidates.some((candidate) => /대구/.test(candidate.ingredientName)));
+  assert.ok(candidates.some((candidate) => /수분|단백질|지방/.test(candidate.nutritionSummary)));
+  assertIngredientGuideSafety(guide);
+});
+
+test("ingredient selection places high-fat pork intestine in caution list", async () => {
+  const loaded = await loadPetFoodIngredients("돼지 대창");
+  const guide = buildIngredientSelectionGuide({
+    dogName: "몽이",
+    stool: "soft",
+    goal: "sensitive_stomach",
+    requestedIngredientNames: ["돼지 대창"],
+    includeIngredientGuide: true,
+    dataNotice: loaded.dataNotice,
+  }, loaded.ingredients);
+
+  assert.ok(guide.cautionIngredients.some((candidate) => candidate.ingredientName === "돼지 대창"));
+  assert.match(
+    guide.cautionIngredients.flatMap((candidate) => [...candidate.reasons, ...candidate.cautionNotes]).join(" "),
+    /지방/,
+  );
+  assertIngredientGuideSafety(guide);
+});
+
+test("food safety nutrition context never lowers dangerous food risk", async () => {
+  const loaded = await loadPetFoodIngredients("당근");
+  const carrot = findMatchingIngredient("당근", loaded.ingredients);
+  const carrotSafety = checkFoodSafety({ foodName: "당근", includeIngredientGuide: true });
+  const summary = carrot !== undefined
+    ? buildIngredientNutritionSummary(carrot, loaded.dataNotice)
+    : undefined;
+  const grapeSafety = checkFoodSafety({ foodName: "포도", includeIngredientGuide: true });
+
+  assert.equal(carrotSafety.riskLevel, "safe");
+  assert.match(summary?.nutritionSummary ?? "", /수분|단백질|지방/);
+  assert.doesNotMatch(JSON.stringify(summary), /먹이세요/);
+  assert.equal(grapeSafety.riskLevel, "danger");
+  assert.match(JSON.stringify(grapeSafety), /빠른 동물병원 상담 권장/);
 });
 
 test("pet chat summary extracts symptoms and creates vet summary", () => {
@@ -461,6 +643,8 @@ test("daily care rules adapt guidance by symptoms and age", () => {
   assert.match(care.dietManagement, /평소 먹던 사료/);
   assert.match(care.waterCheck, /7kg/);
   assert.match(care.restRecommendation, /노령견/);
+  assert.ok(Array.isArray(care.dietIngredientHints));
+  assert.match(care.dietIngredientHints.join(" "), /새 원료|지방/);
 });
 
 test("vet summary keeps structured consultation fields", () => {
@@ -695,6 +879,29 @@ test("food ingestion event fills dog name and weight from dogProfile", () => {
   assert.match(analysis.kakaoActionText.vetCallScript, /몽이/);
 });
 
+test("food ingestion event adds ingredient context for a matched non-danger food", async () => {
+  const loaded = await loadPetFoodIngredients("당근");
+  const analysis = analyzeFoodIngestionEvent({
+    dogProfile: {
+      dogName: "몽이",
+      weightKg: 11,
+      usualFood: "닭고기 사료",
+    },
+    foodName: "당근",
+    foodDetail: "뿌리, 생것",
+    amount: "조금",
+    eatenAt: "방금",
+    currentSymptoms: ["증상 없음"],
+    includeIngredientGuide: true,
+    ingredientGoal: "normal_daily",
+  }, loaded);
+
+  assert.equal(analysis.riskLevel, "safe");
+  assert.match(analysis.ingredientNutritionSummary?.nutritionSummary ?? "", /수분|단백질|지방/);
+  assert.equal(analysis.ingredientSelectionGuide?.mode, "food_ingestion_context");
+  assertIngredientGuideSafety(analysis.ingredientSelectionGuide);
+});
+
 test("dangerous food prioritizes existing vet without hospital search", () => {
   const analysis = analyzeFoodIngestionEvent({
     dogProfile: {
@@ -809,6 +1016,29 @@ function assertToolChainGuide(toolChainGuide) {
     serialized,
     /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|확실히 괜찮습니다|완치/,
   );
+}
+
+function assertIngredientGuideSafety(ingredientSelectionGuide) {
+  assert.equal(typeof ingredientSelectionGuide, "object");
+  assert.ok(Array.isArray(ingredientSelectionGuide.recommendedCriteria));
+  assert.ok(Array.isArray(ingredientSelectionGuide.avoidCriteria));
+  assert.ok(Array.isArray(ingredientSelectionGuide.possibleIngredients));
+  assert.ok(Array.isArray(ingredientSelectionGuide.cautionIngredients));
+  assert.ok(Array.isArray(ingredientSelectionGuide.transitionGuide));
+  assert.equal(typeof ingredientSelectionGuide.familyShareText, "string");
+  assert.equal(typeof ingredientSelectionGuide.safetyNote, "string");
+  assert.doesNotMatch(
+    JSON.stringify(ingredientSelectionGuide),
+    /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|확실히 괜찮습니다|완치|먹이면 낫습니다|치료됩니다|주식으로 대체하세요|처방식 대신/,
+  );
+}
+
+function restoreEnv(name, value) {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
 }
 
 function hasRecommendedTool(toolChainGuide, toolName) {

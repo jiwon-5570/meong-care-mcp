@@ -6,6 +6,7 @@ import {
   type ToolChainGuide,
 } from "./toolChainGuideRules.js";
 import type { DogProfile } from "../types/dogProfile.js";
+import type { IngredientNutritionSummary } from "../types/petFoodIngredient.js";
 
 export type FoodRiskLevel = "safe" | "caution" | "danger" | "unknown";
 
@@ -16,6 +17,7 @@ export interface FoodSafetyInput {
   dogProfile?: DogProfile;
   ownerConcern?: string;
   ownerRequestedHospitalSearch?: boolean;
+  includeIngredientGuide?: boolean;
 }
 
 export interface FoodSafetyResult {
@@ -26,6 +28,7 @@ export interface FoodSafetyResult {
   guardianActions: string[];
   riskPresentation: RiskPresentation;
   toolChainGuide: ToolChainGuide;
+  ingredientNutritionSummary?: IngredientNutritionSummary;
 }
 
 interface FoodRule {

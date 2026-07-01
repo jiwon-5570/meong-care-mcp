@@ -25,6 +25,13 @@ import {
   type ToolChainGuide,
 } from "./toolChainGuideRules.js";
 import type { DogProfileUsage } from "../types/dogProfile.js";
+import {
+  buildIngredientSelectionGuide,
+  shouldBuildIngredientSelectionGuide,
+  type IngredientSelectionInput,
+} from "./ingredientSelectionRules.js";
+import { loadPetFoodIngredients } from "../services/petFoodIngredientService.js";
+import type { IngredientSelectionGuide } from "../types/petFoodIngredient.js";
 
 export type DailyCareNoteInput = DailyStatusInput;
 
@@ -40,6 +47,7 @@ export interface DailyCareNoteResult {
   dogProfileUsage: DogProfileUsage;
   trendSummary: TrendSummary;
   toolChainGuide: ToolChainGuide;
+  ingredientSelectionGuide?: IngredientSelectionGuide;
   userFriendlyGuide: string;
   todayCare: DailyCareRecommendation;
   vetConsultPreparation: VetVisitSummaryResult;
@@ -48,7 +56,7 @@ export interface DailyCareNoteResult {
   nextAction: string;
 }
 
-export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteResult {
+export async function createDailyCareNote(input: DailyCareNoteInput): Promise<DailyCareNoteResult> {
   const analysis = analyzeDailyStatus(input);
   const normalized = normalizeDailyStatusInput(input);
   const symptomsForSummary = analysis.mainSymptoms.length > 0
@@ -60,6 +68,10 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     mainSymptoms: symptomsForSummary,
     weightKg: normalized.weightKg,
     ageYears: normalized.ageYears,
+    includeIngredientGuide: input.includeIngredientGuide,
+    ingredientGoal: input.ingredientGoal,
+    requestedIngredientNames: input.requestedIngredientNames,
+    dogProfile: input.dogProfile,
   });
   const vetConsultPreparation = createVetVisitSummary({
     dogName: analysis.dogName,
@@ -112,6 +124,41 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     trendSummary: analysis.trendSummary,
     vetContactGuide: toolChainGuide.vetContactGuide,
   });
+  const ingredientSelectionInput: IngredientSelectionInput = {
+    dogName: analysis.dogName,
+    ageYears: normalized.ageYears,
+    weightKg: normalized.weightKg,
+    appetite: normalized.appetite,
+    stool: normalized.stool,
+    vomiting: normalized.vomiting,
+    energy: normalized.energy,
+    itching: normalized.itching,
+    ownerConcern: normalized.ownerConcern,
+    mainSymptoms: analysis.mainSymptoms,
+    foodOrSnackToday: normalized.foodOrSnackToday,
+    usualFood: input.dogProfile?.usualFood,
+    allergyOrSensitiveFoods: input.dogProfile?.allergyOrSensitiveFoods,
+    knownConditions: input.dogProfile?.knownConditions,
+    goal: input.ingredientGoal,
+    requestedIngredientNames: input.requestedIngredientNames,
+    includeIngredientGuide: input.includeIngredientGuide,
+  };
+  let ingredientSelectionGuide: IngredientSelectionGuide | undefined;
+
+  if (shouldBuildIngredientSelectionGuide(ingredientSelectionInput)) {
+    const ingredientQuery = input.requestedIngredientNames?.length === 1
+      ? input.requestedIngredientNames[0]
+      : input.requestedIngredientNames !== undefined
+        ? undefined
+        : normalized.ownerConcern;
+    const loadedIngredients = await loadPetFoodIngredients(
+      ingredientQuery,
+    );
+    ingredientSelectionGuide = buildIngredientSelectionGuide(
+      { ...ingredientSelectionInput, dataNotice: loadedIngredients.dataNotice },
+      loadedIngredients.ingredients,
+    );
+  }
 
   return {
     dogName: analysis.dogName,
@@ -125,6 +172,7 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
     dogProfileUsage: analysis.dogProfileUsage,
     trendSummary: analysis.trendSummary,
     toolChainGuide,
+    ...(ingredientSelectionGuide !== undefined ? { ingredientSelectionGuide } : {}),
     userFriendlyGuide: buildUserFriendlyGuide(
       analysis.dogName,
       analysis.riskPresentation,
@@ -132,6 +180,7 @@ export function createDailyCareNote(input: DailyCareNoteInput): DailyCareNoteRes
       symptomsForSummary,
       analysis.missingInfoQuestions,
       analysis.trendSummary,
+      ingredientSelectionGuide,
     ),
     todayCare,
     vetConsultPreparation,
@@ -159,6 +208,7 @@ function buildUserFriendlyGuide(
   symptoms: string[],
   missingInfoQuestions: string[],
   trendSummary: TrendSummary,
+  ingredientSelectionGuide: IngredientSelectionGuide | undefined,
 ): string {
   const symptomText = symptoms.length > 0 ? symptoms.join(", ") : "뚜렷한 증상 정보 없음";
   const missingText = missingInfoQuestions.length > 0
@@ -172,6 +222,9 @@ function buildUserFriendlyGuide(
     `주요 내용: ${symptomText}`,
     currentAssessment,
     `최근 기록 비교: ${trendSummary.userMessage}`,
+    ...(ingredientSelectionGuide !== undefined
+      ? ["식단 원료 가이드: 새 원료는 소량부터 확인하고, 지방이 높은 원료는 우선 주의해 주세요."]
+      : []),
     missingText,
     "병원에 보여줄 내용은 vetShareCard.copyableText를 복사하면 됩니다.",
   ].join("\n");

@@ -9,6 +9,7 @@ import {
   type ToolChainGuide,
 } from "./toolChainGuideRules.js";
 import type { DogProfile, DogProfileUsage } from "../types/dogProfile.js";
+import type { IngredientGoal } from "./ingredientSelectionRules.js";
 
 export type AppetiteStatus = "normal" | "less" | "none" | "increased" | "unknown";
 export type StoolStatus = "normal" | "soft" | "diarrhea" | "bloody" | "unknown";
@@ -33,6 +34,9 @@ export interface DailyStatusInput {
   dogProfile?: DogProfile;
   recentRecords?: RecentDailyStatusRecord[];
   ownerRequestedHospitalSearch?: boolean;
+  includeIngredientGuide?: boolean;
+  ingredientGoal?: IngredientGoal;
+  requestedIngredientNames?: string[];
 }
 
 export interface NormalizedDailyStatusInput {

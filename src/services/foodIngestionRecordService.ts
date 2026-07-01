@@ -6,6 +6,7 @@ import type {
   StoredFoodIngestionRecord,
 } from "../types/foodIngestionRecord.js";
 import { SAFETY_MESSAGE } from "../utils/safetyMessage.js";
+import { loadPetFoodIngredients } from "./petFoodIngredientService.js";
 
 const DEFAULT_RECORDS_PATH = "src/data/foodIngestionRecords.json";
 const BASE64_PREVIEW_LENGTH = 32;
@@ -14,7 +15,13 @@ export async function recordFoodIngestionEvent(
   input: FoodIngestionEventInput,
 ): Promise<FoodIngestionEventResult> {
   const now = new Date();
-  const analysis = analyzeFoodIngestionEvent(input);
+  const preliminaryAnalysis = analyzeFoodIngestionEvent(input);
+  const analysis = preliminaryAnalysis.riskLevel === "danger"
+    ? preliminaryAnalysis
+    : analyzeFoodIngestionEvent(
+      input,
+      await loadPetFoodIngredients(input.foodName),
+    );
   const recordId = createRecordId(now);
   const record: StoredFoodIngestionRecord = {
     id: recordId,
@@ -53,6 +60,12 @@ export async function recordFoodIngestionEvent(
     kakaoActionText: analysis.kakaoActionText,
     dogProfileUsage: analysis.dogProfileUsage,
     toolChainGuide: analysis.toolChainGuide,
+    ...(analysis.ingredientSelectionGuide !== undefined
+      ? { ingredientSelectionGuide: analysis.ingredientSelectionGuide }
+      : {}),
+    ...(analysis.ingredientNutritionSummary !== undefined
+      ? { ingredientNutritionSummary: analysis.ingredientNutritionSummary }
+      : {}),
     safetyNotice: SAFETY_MESSAGE,
   };
 }

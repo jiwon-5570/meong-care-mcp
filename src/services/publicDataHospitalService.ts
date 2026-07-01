@@ -123,7 +123,7 @@ async function fetchPublicAnimalHospitals(
   url.searchParams.set("numOfRows", String(maxResults ?? 20));
   url.searchParams.set("pageNo", "1");
   url.searchParams.set("returnType", "json");
-  url.searchParams.set("cond[ROAD_NM_ADDR::LIKE]", region);
+  url.searchParams.set("cond[ROAD_NM_ADDR::LIKE]", region.replace(/\s+/g, ""));
 
   if (config.serviceKey !== undefined && config.serviceKey.length > 0) {
     url.searchParams.set("serviceKey", config.serviceKey);

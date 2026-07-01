@@ -21,6 +21,10 @@ const BANNED_PHRASES = [
   "정상 괜찮습니다",
   "확실히 괜찮습니다",
   "완치",
+  "먹이면 낫습니다",
+  "치료됩니다",
+  "주식으로 대체하세요",
+  "처방식 대신",
 ];
 const EXPECTED_SAFETY_MESSAGE_PART = "진단이나 처방이 아니며";
 const MOJIBAKE_HINTS = ["\u5360", "\u7b4c", "\u7670", "\ufffd", "\uf9ce", "\u8e42", "\u8adb", "\u6e72"];
@@ -64,6 +68,20 @@ const toolCases = [
         "check_food_safety should include fast vet consultation guidance for grape.",
       );
       assert(!hasRecommendedTool(payload, "find_nearby_animal_hospitals"), "check_food_safety must not auto-recommend hospital search.");
+    },
+  },
+  {
+    name: "check_food_safety",
+    args: {
+      foodName: "당근",
+      includeIngredientGuide: true,
+    },
+    assert: (payload) => {
+      assert(payload.riskLevel === "safe", "check_food_safety should not classify carrot as dangerous.");
+      assert(
+        typeof payload.ingredientNutritionSummary?.nutritionSummary === "string",
+        "check_food_safety should include carrot ingredientNutritionSummary.",
+      );
     },
   },
   {
@@ -171,6 +189,34 @@ const toolCases = [
         ageYears: 6,
         weightKg: 11,
         usualFood: "닭고기 사료",
+      },
+      ownerConcern: "오늘 밥을 반만 먹고 변이 묽어요. 집밥 원료 선택 기준도 알려줘.",
+      includeIngredientGuide: true,
+      ingredientGoal: "sensitive_stomach",
+    },
+    assert: (payload) => {
+      assert(
+        payload.ingredientSelectionGuide?.mode === "daily_status_based_ingredient_guide",
+        "create_daily_care_note should include ingredientSelectionGuide.",
+      );
+      assert(
+        typeof payload.toolChainGuide === "object",
+        "create_daily_care_note should preserve toolChainGuide with ingredient guide.",
+      );
+      assert(
+        typeof payload.kakaoActionText?.familyShareText === "string",
+        "create_daily_care_note should preserve kakaoActionText with ingredient guide.",
+      );
+    },
+  },
+  {
+    name: "create_daily_care_note",
+    args: {
+      dogProfile: {
+        dogName: "몽이",
+        ageYears: 6,
+        weightKg: 11,
+        usualFood: "닭고기 사료",
         usualStool: "보통",
       },
       ownerConcern: "오늘도 밥을 거의 안 먹고 변이 묽어요.",
@@ -230,6 +276,7 @@ const toolCases = [
     assert: (payload) => {
       assert(Array.isArray(payload.symptomsToMonitor), "recommend_daily_care should include symptomsToMonitor.");
       assert(typeof payload.riskPresentation?.riskBadge === "string", "recommend_daily_care should include riskPresentation.");
+      assert(Array.isArray(payload.dietIngredientHints), "recommend_daily_care should include state-based dietIngredientHints.");
     },
   },
   {
@@ -809,6 +856,56 @@ function validateToolPayload(toolName, payload) {
         `${toolName} nextTool.userConfirmationNeeded is required.`,
       );
     }
+  }
+
+  if (payload.ingredientSelectionGuide !== undefined) {
+    assert(
+      typeof payload.ingredientSelectionGuide === "object" && payload.ingredientSelectionGuide !== null,
+      `${toolName} ingredientSelectionGuide must be object.`,
+    );
+    assert(
+      Array.isArray(payload.ingredientSelectionGuide.recommendedCriteria),
+      `${toolName} ingredientSelectionGuide.recommendedCriteria must be array.`,
+    );
+    assert(
+      Array.isArray(payload.ingredientSelectionGuide.avoidCriteria),
+      `${toolName} ingredientSelectionGuide.avoidCriteria must be array.`,
+    );
+    assert(
+      Array.isArray(payload.ingredientSelectionGuide.possibleIngredients),
+      `${toolName} ingredientSelectionGuide.possibleIngredients must be array.`,
+    );
+    assert(
+      Array.isArray(payload.ingredientSelectionGuide.cautionIngredients),
+      `${toolName} ingredientSelectionGuide.cautionIngredients must be array.`,
+    );
+    assert(
+      Array.isArray(payload.ingredientSelectionGuide.transitionGuide),
+      `${toolName} ingredientSelectionGuide.transitionGuide must be array.`,
+    );
+    assert(
+      typeof payload.ingredientSelectionGuide.familyShareText === "string",
+      `${toolName} ingredientSelectionGuide.familyShareText is required.`,
+    );
+    assert(
+      typeof payload.ingredientSelectionGuide.safetyNote === "string",
+      `${toolName} ingredientSelectionGuide.safetyNote is required.`,
+    );
+  }
+
+  if (payload.ingredientNutritionSummary !== undefined) {
+    assert(
+      typeof payload.ingredientNutritionSummary === "object" && payload.ingredientNutritionSummary !== null,
+      `${toolName} ingredientNutritionSummary must be object.`,
+    );
+    assert(
+      typeof payload.ingredientNutritionSummary.ingredientName === "string",
+      `${toolName} ingredientNutritionSummary.ingredientName is required.`,
+    );
+    assert(
+      typeof payload.ingredientNutritionSummary.nutritionSummary === "string",
+      `${toolName} ingredientNutritionSummary.nutritionSummary is required.`,
+    );
   }
 
   if (typeof payload.riskLevel === "string") {

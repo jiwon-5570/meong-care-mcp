@@ -14,6 +14,18 @@ import type {
   FoodIngestionRecordedSummary,
 } from "../types/foodIngestionRecord.js";
 import type { DogProfileUsage } from "../types/dogProfile.js";
+import {
+  buildIngredientNutritionSummary,
+  buildIngredientSelectionGuide,
+  findMatchingIngredient,
+  shouldBuildIngredientSelectionGuide,
+  type IngredientSelectionInput,
+} from "./ingredientSelectionRules.js";
+import type {
+  IngredientNutritionSummary,
+  IngredientSelectionGuide,
+  PetFoodIngredientLoadResult,
+} from "../types/petFoodIngredient.js";
 
 export interface FoodIngestionAnalysis {
   riskLevel: FoodRiskLevel;
@@ -26,9 +38,14 @@ export interface FoodIngestionAnalysis {
   kakaoActionText: KakaoActionText;
   dogProfileUsage: DogProfileUsage;
   toolChainGuide: ToolChainGuide;
+  ingredientSelectionGuide?: IngredientSelectionGuide;
+  ingredientNutritionSummary?: IngredientNutritionSummary;
 }
 
-export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodIngestionAnalysis {
+export function analyzeFoodIngestionEvent(
+  input: FoodIngestionEventInput,
+  ingredientData?: PetFoodIngredientLoadResult,
+): FoodIngestionAnalysis {
   const merged = mergeDogProfile(input);
   const currentSymptoms = normalizeSymptoms(merged.currentSymptoms);
   const recordedSummary = buildRecordedSummary(merged, currentSymptoms);
@@ -88,6 +105,33 @@ export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodI
     dogProfileUsage: merged.dogProfileUsage,
     vetContactGuide: toolChainGuide.vetContactGuide,
   });
+  const matchedIngredient = foodSafety.riskLevel !== "danger" && ingredientData !== undefined
+    ? findMatchingIngredient(buildRiskTargetName(merged), ingredientData.ingredients)
+    : undefined;
+  const ingredientNutritionSummary = matchedIngredient !== undefined && ingredientData !== undefined
+    ? buildIngredientNutritionSummary(matchedIngredient, ingredientData.dataNotice)
+    : undefined;
+  const ingredientSelectionInput: IngredientSelectionInput = {
+    dogName: recordedSummary.dogName ?? "반려견",
+    weightKg: recordedSummary.weightKg ?? undefined,
+    ownerConcern: recordedSummary.ownerMemo ?? undefined,
+    mainSymptoms: recordedSummary.currentSymptoms,
+    foodOrSnackToday: [buildFoodLabel(recordedSummary.foodName, recordedSummary.foodDetail)],
+    usualFood: merged.dogProfile?.usualFood,
+    allergyOrSensitiveFoods: merged.dogProfile?.allergyOrSensitiveFoods,
+    knownConditions: merged.dogProfile?.knownConditions,
+    goal: merged.ingredientGoal,
+    requestedIngredientNames: merged.requestedIngredientNames ??
+      (merged.includeIngredientGuide === true ? [merged.foodName] : undefined),
+    includeIngredientGuide: merged.includeIngredientGuide,
+    dataNotice: ingredientData?.dataNotice,
+    mode: "food_ingestion_context",
+  };
+  const ingredientSelectionGuide = foodSafety.riskLevel !== "danger" &&
+      ingredientData !== undefined &&
+      shouldBuildIngredientSelectionGuide(ingredientSelectionInput)
+    ? buildIngredientSelectionGuide(ingredientSelectionInput, ingredientData.ingredients)
+    : undefined;
 
   return {
     riskLevel: foodSafety.riskLevel,
@@ -100,6 +144,8 @@ export function analyzeFoodIngestionEvent(input: FoodIngestionEventInput): FoodI
     kakaoActionText,
     dogProfileUsage: merged.dogProfileUsage,
     toolChainGuide,
+    ...(ingredientSelectionGuide !== undefined ? { ingredientSelectionGuide } : {}),
+    ...(ingredientNutritionSummary !== undefined ? { ingredientNutritionSummary } : {}),
   };
 }
 

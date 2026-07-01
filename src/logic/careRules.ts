@@ -8,6 +8,7 @@ import {
   type ToolChainGuide,
 } from "./toolChainGuideRules.js";
 import type { DogProfile } from "../types/dogProfile.js";
+import type { IngredientGoal } from "./ingredientSelectionRules.js";
 
 export interface DailyCareInput {
   dogName: string;
@@ -15,6 +16,10 @@ export interface DailyCareInput {
   mainSymptoms: string[];
   weightKg?: number;
   ageYears?: number;
+  includeIngredientGuide?: boolean;
+  ingredientGoal?: IngredientGoal;
+  requestedIngredientNames?: string[];
+  dogProfile?: DogProfile;
 }
 
 export interface DailyCareRecommendation {
@@ -27,6 +32,7 @@ export interface DailyCareRecommendation {
   restRecommendation: string;
   symptomsToMonitor: string[];
   riskPresentation?: RiskPresentation;
+  dietIngredientHints?: string[];
 }
 
 export interface VetVisitSummaryInput {
@@ -91,6 +97,7 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
         "급격한 처짐",
         "의식 저하",
       ]),
+      ...buildDietIngredientHints(input, symptomContext),
     };
   }
 
@@ -111,6 +118,7 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
         "설사 지속",
         "활동량 추가 감소",
       ]),
+      ...buildDietIngredientHints(input, symptomContext),
     };
   }
 
@@ -135,6 +143,7 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
         "활동량 감소",
         "기침 또는 가려움 악화",
       ]),
+      ...buildDietIngredientHints(input, symptomContext),
     };
   }
 
@@ -156,7 +165,43 @@ export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendati
       "가려움",
       "눈물 또는 눈곱",
     ],
+    ...buildDietIngredientHints(input, symptomContext),
   };
+}
+
+function buildDietIngredientHints(
+  input: DailyCareInput,
+  context: SymptomContext,
+): { dietIngredientHints?: string[] } {
+  const shouldInclude = input.includeIngredientGuide === true ||
+    input.ingredientGoal !== undefined ||
+    (input.requestedIngredientNames?.length ?? 0) > 0 ||
+    context.hasDigestiveSignal;
+
+  if (!shouldInclude) return {};
+
+  const hints = [
+    "오늘은 기존 사료 위주로 관리하고 새 원료는 한 가지씩 소량으로 확인해 주세요.",
+    "식단 변경 전후 식욕, 변, 구토 여부를 함께 기록해 주세요.",
+  ];
+
+  if (context.hasDigestiveSignal || input.ingredientGoal === "sensitive_stomach") {
+    hints.push("묽은 변, 설사 또는 구토 기록이 있으면 지방 비율이 높은 원료는 우선 주의해 주세요.");
+  }
+  if (input.ingredientGoal === "weight_control") {
+    hints.push("체중 관리 목적이라면 원료의 지방 비율과 실제 급여량을 함께 비교해 주세요.");
+  }
+  if (input.ingredientGoal === "skin_coat") {
+    hints.push("새 단백질원은 하나씩 확인하고 가려움, 붉은기와 변 상태를 함께 기록해 주세요.");
+  }
+  if ((input.dogProfile?.knownConditions?.length ?? 0) > 0) {
+    hints.push("보호자가 제공한 기존 상태가 있으므로 식단 변경 전 수의사 식이 상담을 우선해 주세요.");
+  }
+  if ((input.requestedIngredientNames?.length ?? 0) > 0) {
+    hints.push(`비교 요청 원료: ${input.requestedIngredientNames?.join(", ")}`);
+  }
+
+  return { dietIngredientHints: hints };
 }
 
 export function createVetVisitSummary(input: VetVisitSummaryInput): VetVisitSummaryResult {

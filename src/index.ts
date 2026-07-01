@@ -25,6 +25,11 @@ import { loadSymptomDictionary } from "./services/publicDataSymptomService.js";
 import { recordPetPhotoObservation } from "./services/photoRecordService.js";
 import { recordFoodIngestionEvent } from "./services/foodIngestionRecordService.js";
 import { withSafetyMessage } from "./utils/safetyMessage.js";
+import { loadPetFoodIngredients } from "./services/petFoodIngredientService.js";
+import {
+  buildIngredientNutritionSummary,
+  findMatchingIngredient,
+} from "./logic/ingredientSelectionRules.js";
 
 const PORT = parsePort(process.env.PORT);
 const MCP_ENDPOINT = "/mcp";
@@ -65,6 +70,15 @@ const recentDailyStatusRecordSchema = z.object({
   energy: z.string().optional(),
   ownerConcern: z.string().optional(),
 });
+
+const ingredientGoalSchema = z.enum([
+  "normal_daily",
+  "sensitive_stomach",
+  "weight_control",
+  "senior",
+  "skin_coat",
+  "after_vet_advice",
+]);
 
 app.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({
@@ -135,7 +149,7 @@ function createMcpServer(): McpServer {
     {
       title: "Check Dog Food Safety",
       description:
-        "Checks dog food safety risk and guardian actions in MeongCareNote MCP(멍케어노트 MCP).",
+        "Checks dog food safety risk and guardian actions, with optional ingredient nutrition context, in MeongCareNote MCP(멍케어노트 MCP).",
       annotations: {
         title: "Check Dog Food Safety",
         readOnlyHint: true,
@@ -150,10 +164,25 @@ function createMcpServer(): McpServer {
         dogProfile: dogProfileSchema,
         ownerConcern: z.string().optional(),
         ownerRequestedHospitalSearch: z.boolean().optional(),
+        includeIngredientGuide: z.boolean().optional(),
       },
     },
     async (input) => {
-      const result = withSafetyMessage(checkFoodSafety(input));
+      const foodSafety = checkFoodSafety(input);
+      let ingredientNutritionSummary;
+
+      if (input.includeIngredientGuide === true && foodSafety.riskLevel !== "danger") {
+        const loaded = await loadPetFoodIngredients(input.foodName);
+        const matched = findMatchingIngredient(input.foodName, loaded.ingredients);
+        ingredientNutritionSummary = matched !== undefined
+          ? buildIngredientNutritionSummary(matched, loaded.dataNotice)
+          : undefined;
+      }
+
+      const result = withSafetyMessage({
+        ...foodSafety,
+        ...(ingredientNutritionSummary !== undefined ? { ingredientNutritionSummary } : {}),
+      });
       return toToolResponse(result);
     },
   );
@@ -226,7 +255,7 @@ function createMcpServer(): McpServer {
     {
       title: "Create Daily Dog Care Note",
       description:
-        "Creates a combined daily care note with dogProfile defaults, recent-record trends, care guidance, and a vet summary in MeongCareNote MCP(멍케어노트 MCP).",
+        "Creates a combined daily care note with profile defaults, trends, care guidance, optional ingredient selection criteria, and a vet summary in MeongCareNote MCP(멍케어노트 MCP).",
       annotations: {
         title: "Create Daily Dog Care Note",
         readOnlyHint: true,
@@ -237,7 +266,7 @@ function createMcpServer(): McpServer {
       inputSchema: dailyStatusSchema(),
     },
     async (input) => {
-      const result = withSafetyMessage(createDailyCareNote(input));
+      const result = withSafetyMessage(await createDailyCareNote(input));
       return toToolResponse(result);
     },
   );
@@ -247,7 +276,7 @@ function createMcpServer(): McpServer {
     {
       title: "Recommend Daily Dog Care",
       description:
-        "Recommends daily diet, water, walk, and rest actions from risk level and symptoms in MeongCareNote MCP(멍케어노트 MCP).",
+        "Recommends daily diet, ingredient caution, water, walk, and rest actions from risk level and symptoms in MeongCareNote MCP(멍케어노트 MCP).",
       annotations: {
         title: "Recommend Daily Dog Care",
         readOnlyHint: true,
@@ -261,6 +290,10 @@ function createMcpServer(): McpServer {
         mainSymptoms: z.array(z.string()),
         weightKg: z.number().positive().optional(),
         ageYears: z.number().min(0).optional(),
+        includeIngredientGuide: z.boolean().optional(),
+        ingredientGoal: ingredientGoalSchema.optional(),
+        requestedIngredientNames: z.array(z.string()).optional(),
+        dogProfile: dogProfileSchema,
       },
     },
     async (input) => {
@@ -459,7 +492,7 @@ function createMcpServer(): McpServer {
     {
       title: "Record Food Ingestion Event",
       description:
-        "Records a dog food ingestion event, applies optional dogProfile basics, and prepares a veterinary consultation summary in MeongCareNote MCP(멍케어노트 MCP).",
+        "Records a dog food ingestion event, preserves food-risk priority, optionally adds ingredient nutrition context, and prepares a vet summary in MeongCareNote MCP(멍케어노트 MCP).",
       annotations: {
         title: "Record Food Ingestion Event",
         readOnlyHint: false,
@@ -480,6 +513,9 @@ function createMcpServer(): McpServer {
         ownerMemo: z.string().optional(),
         dogProfile: dogProfileSchema,
         ownerRequestedHospitalSearch: z.boolean().optional(),
+        includeIngredientGuide: z.boolean().optional(),
+        ingredientGoal: ingredientGoalSchema.optional(),
+        requestedIngredientNames: z.array(z.string()).optional(),
       },
     },
     async (input) => {
@@ -509,6 +545,9 @@ function dailyStatusSchema() {
     dogProfile: dogProfileSchema,
     recentRecords: z.array(recentDailyStatusRecordSchema).optional(),
     ownerRequestedHospitalSearch: z.boolean().optional(),
+    includeIngredientGuide: z.boolean().optional(),
+    ingredientGoal: ingredientGoalSchema.optional(),
+    requestedIngredientNames: z.array(z.string()).optional(),
   };
 }
 
