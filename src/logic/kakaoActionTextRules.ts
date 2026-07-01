@@ -5,6 +5,7 @@ import type { TrendSummary } from "./trendSummaryRules.js";
 import type { VetContactGuide } from "./toolChainGuideRules.js";
 import type { VetShareCard } from "./vetShareCardRules.js";
 import type { DogProfileUsage } from "../types/dogProfile.js";
+import type { ConversationFollowUp } from "./conversationFollowUpRules.js";
 
 export type KakaoActionSource =
   | "daily_status"
@@ -38,6 +39,7 @@ export interface KakaoActionTextInput {
   comparisonFocus?: string[];
   photoType?: "stool" | "skin";
   vetContactGuide?: VetContactGuide;
+  conversationFollowUp?: ConversationFollowUp;
 }
 
 export interface KakaoActionText {
@@ -95,6 +97,7 @@ export function buildKakaoActionText(input: KakaoActionTextInput): KakaoActionTe
           riskText,
           input.photoRecordUserMessage,
           input.vetContactGuide,
+          input.conversationFollowUp?.assistantFollowUpQuestion,
         )
         : buildChatFirstReply(
           dogName,
@@ -106,6 +109,7 @@ export function buildKakaoActionText(input: KakaoActionTextInput): KakaoActionTe
           input.dogProfileUsage,
           input.trendSummary,
           input.vetContactGuide,
+          input.conversationFollowUp?.assistantFollowUpQuestion,
         ),
     ),
     familyShareText: sanitizeGeneratedText(
@@ -142,12 +146,14 @@ function buildPhotoChatFirstReply(
   riskText: RiskText,
   photoRecordUserMessage: string | undefined,
   vetContactGuide: VetContactGuide | undefined,
+  followUpQuestion: string | undefined,
 ): string {
   const messageLines = cleanText(photoRecordUserMessage)?.split("\n") ?? [];
   const contactLine = buildVetContactLine(vetContactGuide);
-  return [riskText.badge, ...messageLines, ...(contactLine !== undefined ? [contactLine] : [])]
-    .slice(0, 7)
-    .join("\n");
+  return finalizeChatLines(
+    [riskText.badge, ...messageLines, ...(contactLine !== undefined ? [contactLine] : [])],
+    followUpQuestion,
+  );
 }
 
 function buildChatFirstReply(
@@ -160,6 +166,7 @@ function buildChatFirstReply(
   dogProfileUsage: DogProfileUsage | undefined,
   trendSummary: TrendSummary | undefined,
   vetContactGuide: VetContactGuide | undefined,
+  followUpQuestion: string | undefined,
 ): string {
   const lines = [
     riskText.badge,
@@ -189,7 +196,17 @@ function buildChatFirstReply(
     lines.push(`추가 확인: ${truncate(missingInfoQuestions[0], 110)}`);
   }
 
-  return lines.slice(0, 7).join("\n");
+  return finalizeChatLines(lines, followUpQuestion);
+}
+
+function finalizeChatLines(lines: string[], followUpQuestion: string | undefined): string {
+  const question = cleanText(followUpQuestion);
+
+  if (question === undefined) {
+    return lines.slice(0, 8).join("\n");
+  }
+
+  return [...lines.slice(0, 8), question].join("\n");
 }
 
 function buildVetContactLine(vetContactGuide: VetContactGuide | undefined): string | undefined {

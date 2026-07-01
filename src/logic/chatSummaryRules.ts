@@ -17,6 +17,10 @@ import type {
   EnergyStatus,
   StoolStatus,
 } from "./riskRules.js";
+import {
+  buildConversationFollowUp,
+  type ConversationFollowUp,
+} from "./conversationFollowUpRules.js";
 
 export type ChatSummarySourceType = "pasted_text" | "screenshot_ocr" | "manual_memo";
 export type ChatVomitingStatus = "none" | "once" | "multiple" | "unknown";
@@ -61,6 +65,7 @@ export interface PetChatSummaryResult {
   vetVisitSummary: string;
   vetShareCard: VetShareCard;
   kakaoActionText: KakaoActionText;
+  conversationFollowUp: ConversationFollowUp;
   questionsForVet: string[];
   privacyNotice: string;
 }
@@ -165,6 +170,17 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
     hasVetCallScript: true,
     missingInfoQuestions,
   });
+  const conversationFollowUp = buildConversationFollowUp({
+    source: "chat_summary",
+    dogName: merged.dogName,
+    riskLevel: risk.riskLevel,
+    mainSymptoms: signals.extractedSymptoms,
+    missingInfoQuestions,
+    hasVetShareCard: true,
+    hasVetCallScript: true,
+    hasFamilyShareText: true,
+    ownerRequestedHospitalSearch,
+  });
   const kakaoActionText = buildKakaoActionText({
     source: "chat_summary",
     dogName: merged.dogName,
@@ -182,6 +198,7 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
     dogProfileUsage: merged.dogProfileUsage,
     trendSummary,
     vetContactGuide: toolChainGuide.vetContactGuide,
+    conversationFollowUp,
   });
 
   return {
@@ -214,6 +231,7 @@ export function summarizePetChatForVet(input: PetChatSummaryInput): PetChatSumma
     ),
     vetShareCard,
     kakaoActionText,
+    conversationFollowUp,
     questionsForVet,
     privacyNotice: PRIVACY_NOTICE,
   };

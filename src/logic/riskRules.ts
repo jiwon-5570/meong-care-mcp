@@ -10,6 +10,10 @@ import {
 } from "./toolChainGuideRules.js";
 import type { DogProfile, DogProfileUsage } from "../types/dogProfile.js";
 import type { IngredientGoal } from "./ingredientSelectionRules.js";
+import {
+  buildConversationFollowUp,
+  type ConversationFollowUp,
+} from "./conversationFollowUpRules.js";
 
 export type AppetiteStatus = "normal" | "less" | "none" | "increased" | "unknown";
 export type StoolStatus = "normal" | "soft" | "diarrhea" | "bloody" | "unknown";
@@ -69,6 +73,7 @@ export interface DailyStatusAnalysis {
   dogProfileUsage: DogProfileUsage;
   trendSummary: TrendSummary;
   toolChainGuide: ToolChainGuide;
+  conversationFollowUp: ConversationFollowUp;
 }
 
 interface DangerousFoodSignal {
@@ -155,6 +160,13 @@ export function analyzeDailyStatus(input: DailyStatusInput): DailyStatusAnalysis
       dogProfileUsage: normalized.dogProfileUsage,
       trendSummary: summarizeTrend(normalized, "urgent", mainSymptoms),
       toolChainGuide: buildDailyStatusToolChain(input, normalized, "urgent", missingInfoQuestions),
+      conversationFollowUp: buildDailyStatusFollowUp(
+        input,
+        normalized,
+        "urgent",
+        mainSymptoms,
+        missingInfoQuestions,
+      ),
     };
   }
 
@@ -180,6 +192,13 @@ export function analyzeDailyStatus(input: DailyStatusInput): DailyStatusAnalysis
       dogProfileUsage: normalized.dogProfileUsage,
       trendSummary: summarizeTrend(normalized, "vet_consult", mainSymptoms),
       toolChainGuide: buildDailyStatusToolChain(input, normalized, "vet_consult", missingInfoQuestions),
+      conversationFollowUp: buildDailyStatusFollowUp(
+        input,
+        normalized,
+        "vet_consult",
+        mainSymptoms,
+        missingInfoQuestions,
+      ),
     };
   }
 
@@ -201,6 +220,13 @@ export function analyzeDailyStatus(input: DailyStatusInput): DailyStatusAnalysis
       dogProfileUsage: normalized.dogProfileUsage,
       trendSummary: summarizeTrend(normalized, "watch", mainSymptoms),
       toolChainGuide: buildDailyStatusToolChain(input, normalized, "watch", missingInfoQuestions),
+      conversationFollowUp: buildDailyStatusFollowUp(
+        input,
+        normalized,
+        "watch",
+        mainSymptoms,
+        missingInfoQuestions,
+      ),
     };
   }
 
@@ -218,7 +244,34 @@ export function analyzeDailyStatus(input: DailyStatusInput): DailyStatusAnalysis
     dogProfileUsage: normalized.dogProfileUsage,
     trendSummary: summarizeTrend(normalized, "normal", []),
     toolChainGuide: buildDailyStatusToolChain(input, normalized, "normal", missingInfoQuestions),
+    conversationFollowUp: buildDailyStatusFollowUp(
+      input,
+      normalized,
+      "normal",
+      [],
+      missingInfoQuestions,
+    ),
   };
+}
+
+function buildDailyStatusFollowUp(
+  original: DailyStatusInput,
+  normalized: NormalizedDailyStatusInput,
+  riskLevel: DailyRiskLevel,
+  mainSymptoms: string[],
+  missingInfoQuestions: string[],
+): ConversationFollowUp {
+  return buildConversationFollowUp({
+    source: "daily_status",
+    dogName: normalized.dogName,
+    riskLevel,
+    mainSymptoms,
+    missingInfoQuestions,
+    hasVetShareCard: false,
+    hasVetCallScript: true,
+    ownerRequestedHospitalSearch: original.ownerRequestedHospitalSearch ??
+      detectHospitalSearchRequest(normalized.ownerConcern),
+  });
 }
 
 function buildDailyStatusToolChain(

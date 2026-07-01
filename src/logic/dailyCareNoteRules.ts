@@ -32,6 +32,10 @@ import {
 } from "./ingredientSelectionRules.js";
 import { loadPetFoodIngredients } from "../services/petFoodIngredientService.js";
 import type { IngredientSelectionGuide } from "../types/petFoodIngredient.js";
+import {
+  buildConversationFollowUp,
+  type ConversationFollowUp,
+} from "./conversationFollowUpRules.js";
 
 export type DailyCareNoteInput = DailyStatusInput;
 
@@ -53,6 +57,7 @@ export interface DailyCareNoteResult {
   vetConsultPreparation: VetVisitSummaryResult;
   vetShareCard: VetShareCard;
   kakaoActionText: KakaoActionText;
+  conversationFollowUp: ConversationFollowUp;
   nextAction: string;
 }
 
@@ -110,20 +115,6 @@ export async function createDailyCareNote(input: DailyCareNoteInput): Promise<Da
     hasVetCallScript: true,
     missingInfoQuestions: analysis.missingInfoQuestions,
   });
-  const kakaoActionText = buildKakaoActionText({
-    source: "daily_care_note",
-    dogName: analysis.dogName,
-    riskLevel: analysis.riskLevel,
-    riskPresentation: analysis.riskPresentation,
-    mainSymptoms: symptomsForSummary,
-    knownInfo: analysis.knownInfo,
-    missingInfoQuestions: analysis.missingInfoQuestions,
-    ownerConcern: normalized.ownerConcern,
-    vetShareCard: vetConsultPreparation.vetShareCard,
-    dogProfileUsage: analysis.dogProfileUsage,
-    trendSummary: analysis.trendSummary,
-    vetContactGuide: toolChainGuide.vetContactGuide,
-  });
   const ingredientSelectionInput: IngredientSelectionInput = {
     dogName: analysis.dogName,
     ageYears: normalized.ageYears,
@@ -159,6 +150,33 @@ export async function createDailyCareNote(input: DailyCareNoteInput): Promise<Da
       loadedIngredients.ingredients,
     );
   }
+  const conversationFollowUp = buildConversationFollowUp({
+    source: "daily_care_note",
+    dogName: analysis.dogName,
+    riskLevel: analysis.riskLevel,
+    mainSymptoms: analysis.mainSymptoms,
+    missingInfoQuestions: analysis.missingInfoQuestions,
+    hasVetShareCard: true,
+    hasVetCallScript: true,
+    hasFamilyShareText: true,
+    hasIngredientSelectionGuide: ingredientSelectionGuide !== undefined,
+    ownerRequestedHospitalSearch,
+  });
+  const kakaoActionText = buildKakaoActionText({
+    source: "daily_care_note",
+    dogName: analysis.dogName,
+    riskLevel: analysis.riskLevel,
+    riskPresentation: analysis.riskPresentation,
+    mainSymptoms: symptomsForSummary,
+    knownInfo: analysis.knownInfo,
+    missingInfoQuestions: analysis.missingInfoQuestions,
+    ownerConcern: normalized.ownerConcern,
+    vetShareCard: vetConsultPreparation.vetShareCard,
+    dogProfileUsage: analysis.dogProfileUsage,
+    trendSummary: analysis.trendSummary,
+    vetContactGuide: toolChainGuide.vetContactGuide,
+    conversationFollowUp,
+  });
 
   return {
     dogName: analysis.dogName,
@@ -186,6 +204,7 @@ export async function createDailyCareNote(input: DailyCareNoteInput): Promise<Da
     vetConsultPreparation,
     vetShareCard: vetConsultPreparation.vetShareCard,
     kakaoActionText,
+    conversationFollowUp,
     nextAction: buildNextAction(analysis.riskPresentation, analysis.missingInfoQuestions),
   };
 }

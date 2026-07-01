@@ -9,6 +9,10 @@ import {
 } from "./toolChainGuideRules.js";
 import type { DogProfile } from "../types/dogProfile.js";
 import type { IngredientGoal } from "./ingredientSelectionRules.js";
+import {
+  buildConversationFollowUp,
+  type ConversationFollowUp,
+} from "./conversationFollowUpRules.js";
 
 export interface DailyCareInput {
   dogName: string;
@@ -68,6 +72,7 @@ export interface VetVisitSummaryResult {
   riskPresentation?: RiskPresentation;
   vetShareCard: VetShareCard;
   toolChainGuide: ToolChainGuide;
+  conversationFollowUp: ConversationFollowUp;
 }
 
 export function recommendDailyCare(input: DailyCareInput): DailyCareRecommendation {
@@ -277,6 +282,16 @@ export function createVetVisitSummary(input: VetVisitSummaryInput): VetVisitSumm
     hasVetCallScript: false,
     missingInfoQuestions,
   });
+  const conversationFollowUp = buildConversationFollowUp({
+    source: "vet_visit_summary",
+    dogName: input.dogName,
+    riskLevel: input.riskLevel,
+    mainSymptoms: symptoms,
+    missingInfoQuestions,
+    hasVetShareCard: true,
+    hasVetCallScript: true,
+    ownerRequestedHospitalSearch,
+  });
 
   return {
     vetVisitSummary: summaryParts.join("\n"),
@@ -288,6 +303,7 @@ export function createVetVisitSummary(input: VetVisitSummaryInput): VetVisitSumm
     ...(riskPresentation !== undefined ? { riskPresentation } : {}),
     vetShareCard,
     toolChainGuide,
+    conversationFollowUp,
   };
 }
 

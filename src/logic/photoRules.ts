@@ -15,6 +15,7 @@ import {
   detectHospitalSearchRequest,
 } from "./toolChainGuideRules.js";
 import type { DogProfileUsage } from "../types/dogProfile.js";
+import { buildConversationFollowUp } from "./conversationFollowUpRules.js";
 
 interface SignRule {
   sign: string;
@@ -109,6 +110,20 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
     hasVetCallScript: true,
     missingInfoQuestions,
   });
+  const conversationFollowUp = buildConversationFollowUp({
+    source: "photo_observation",
+    dogName: merged.dogName,
+    riskLevel,
+    photoType: merged.photoType,
+    mainSymptoms: [...(merged.relatedSymptoms ?? []), ...combinedObservedSigns],
+    observedSigns: combinedObservedSigns,
+    missingInfoQuestions,
+    hasVetShareCard: true,
+    hasVetCallScript: true,
+    hasFamilyShareText: true,
+    hasPhotoFollowUpGuide: true,
+    ownerRequestedHospitalSearch,
+  });
   const kakaoActionText = buildKakaoActionText({
     source: "photo_observation",
     dogName: merged.dogName,
@@ -126,6 +141,7 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
     comparisonFocus: photoFollowUpGuide.comparisonFocus,
     photoType: merged.photoType,
     vetContactGuide: toolChainGuide.vetContactGuide,
+    conversationFollowUp,
   });
 
   return {
@@ -146,11 +162,12 @@ export function analyzePhotoObservation(input: PhotoObservationInput): PhotoObse
     photoRetakeRecommended: photoFollowUpGuide.photoRetakeRecommended,
     photoRecordUserMessage: photoFollowUpGuide.photoRecordUserMessage,
     toolChainGuide,
+    conversationFollowUp,
     photoLimitations:
       "MCP는 사진 원본을 분석하거나 진단하지 않습니다. 보호자 또는 호스트 AI가 제공한 관찰 텍스트를 기록 품질과 상담 준비 관점에서 구조화하며, 실제 상태가 심해 보이거나 증상이 지속되면 수의사 상담을 권장합니다.",
     hospitalSearchGuide:
       riskLevel === "vet_consult" || riskLevel === "urgent"
-        ? "위험도가 vet_consult 이상이면 find_nearby_animal_hospitals tool로 가까운 동물병원을 찾고 방문 전 전화 확인을 권장합니다."
+        ? "평소 다니던 동물병원이나 보호자가 신뢰하는 병원에 먼저 상담을 권장합니다. 주변 병원 후보가 필요하면 “근처 동물병원 찾아줘”라고 요청해 주세요. 그 경우 find_nearby_animal_hospitals를 통해 지역 기반 병원 후보를 안내할 수 있습니다."
         : undefined,
   };
 }

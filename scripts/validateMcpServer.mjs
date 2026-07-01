@@ -29,11 +29,21 @@ const BANNED_PHRASES = [
 const EXPECTED_SAFETY_MESSAGE_PART = "진단이나 처방이 아니며";
 const MOJIBAKE_HINTS = ["\u5360", "\u7b4c", "\u7670", "\ufffd", "\uf9ce", "\u8e42", "\u8adb", "\u6e72"];
 const KAKAO_ACTION_REQUIRED_TOOLS = new Set([
+  "check_food_safety",
   "analyze_daily_status",
   "create_daily_care_note",
   "summarize_pet_chat_for_vet",
   "record_food_ingestion_event",
   "record_pet_photo_observation",
+]);
+const CONVERSATION_FOLLOW_UP_REQUIRED_TOOLS = new Set([
+  "check_food_safety",
+  "analyze_daily_status",
+  "create_daily_care_note",
+  "create_vet_visit_summary",
+  "summarize_pet_chat_for_vet",
+  "record_pet_photo_observation",
+  "record_food_ingestion_event",
 ]);
 const TOOL_CHAIN_REQUIRED_TOOLS = new Set([
   "check_food_safety",
@@ -98,6 +108,23 @@ const toolCases = [
     assert: (payload) => {
       assert(["watch", "vet_consult"].includes(payload.riskLevel), "analyze_daily_status returned unexpected riskLevel.");
       assert(typeof payload.kakaoActionText?.chatFirstReply === "string", "analyze_daily_status should include kakaoActionText.");
+    },
+  },
+  {
+    name: "analyze_daily_status",
+    args: {
+      dogName: "몽이",
+      appetite: "normal",
+      stool: "normal",
+      vomiting: "none",
+      energy: "normal",
+    },
+    assert: (payload) => {
+      assert(payload.riskLevel === "normal", "analyze_daily_status should keep all-normal input at normal.");
+      assert(
+        /기록|비교/.test(payload.conversationFollowUp?.assistantFollowUpQuestion ?? ""),
+        "normal analyze_daily_status should continue with record comparison guidance.",
+      );
     },
   },
   {
@@ -361,13 +388,13 @@ const toolCases = [
         ageYears: 6,
         weightKg: 11,
       },
-      photoType: "stool",
+      photoType: "skin",
       imageBase64: "dGVzdC1pbWFnZS1kYXRh",
       takenAt: "오늘",
-      visualNotes: "묽은 변처럼 보임",
-      observedSigns: ["묽은 변"],
-      relatedSymptoms: ["식욕 감소"],
-      appetite: "less",
+      visualNotes: "배 쪽에 붉은기와 털 빠짐이 보임",
+      observedSigns: ["붉은기", "털 빠짐"],
+      relatedSymptoms: ["가려움"],
+      appetite: "normal",
       vomiting: "none",
       energy: "normal",
     },
@@ -385,6 +412,23 @@ const toolCases = [
       assert(typeof payload.photoRetakeRecommended === "boolean", "record_pet_photo_observation should include photoRetakeRecommended.");
       assert(typeof payload.photoRecordUserMessage === "string", "record_pet_photo_observation should include photoRecordUserMessage.");
       assert(!hasRecommendedTool(payload, "find_nearby_animal_hospitals"), "record_pet_photo_observation must not auto-recommend hospital search.");
+      assert(
+        payload.kakaoActionText.chatFirstReply.includes(payload.conversationFollowUp.assistantFollowUpQuestion),
+        "record_pet_photo_observation chatFirstReply should end with its follow-up question.",
+      );
+      assert(
+        !/위험도가[^.]*find_nearby_animal_hospitals/.test(payload.hospitalSearchGuide ?? ""),
+        "record_pet_photo_observation must not recommend hospital search from risk alone.",
+      );
+      assert(
+        /근처 동물병원 찾아줘/.test(payload.hospitalSearchGuide ?? "") &&
+          /find_nearby_animal_hospitals/.test(payload.hospitalSearchGuide ?? ""),
+        "record_pet_photo_observation should keep hospital search as an explicit user option.",
+      );
+      assert(
+        payload.conversationFollowUp.suggestedUserReplies.includes("근처 동물병원 찾아줘"),
+        "consult-priority photo follow-up should offer explicit hospital search as a user reply.",
+      );
     },
   },
   {
@@ -419,6 +463,10 @@ const toolCases = [
       );
       assert(typeof payload.safetyNotice === "string", "record_food_ingestion_event should include safetyNotice.");
       assert(!hasRecommendedTool(payload, "find_nearby_animal_hospitals"), "record_food_ingestion_event must not auto-recommend hospital search.");
+      assert(
+        /병원|전화|상담/.test(payload.conversationFollowUp.assistantFollowUpQuestion),
+        "danger food ingestion follow-up should prioritize vet call preparation.",
+      );
     },
   },
   {
@@ -665,6 +713,44 @@ function validateToolPayload(toolName, payload) {
 
   if (TOOL_CHAIN_REQUIRED_TOOLS.has(toolName)) {
     assert(payload.toolChainGuide !== undefined, `${toolName} must include toolChainGuide.`);
+  }
+
+  if (CONVERSATION_FOLLOW_UP_REQUIRED_TOOLS.has(toolName)) {
+    assert(payload.conversationFollowUp !== undefined, `${toolName} must include conversationFollowUp.`);
+  }
+
+  if (payload.conversationFollowUp !== undefined) {
+    assert(
+      typeof payload.conversationFollowUp === "object" && payload.conversationFollowUp !== null,
+      `${toolName} conversationFollowUp must be object.`,
+    );
+    assert(
+      typeof payload.conversationFollowUp.assistantFollowUpQuestion === "string" &&
+        payload.conversationFollowUp.assistantFollowUpQuestion.length > 0,
+      `${toolName} assistantFollowUpQuestion is required.`,
+    );
+    assert(
+      Array.isArray(payload.conversationFollowUp.suggestedUserReplies),
+      `${toolName} suggestedUserReplies must be array.`,
+    );
+    assert(
+      payload.conversationFollowUp.suggestedUserReplies.length >= 2,
+      `${toolName} should include at least two suggested replies.`,
+    );
+    assert(
+      typeof payload.conversationFollowUp.nextBestActionLabel === "string" &&
+        payload.conversationFollowUp.nextBestActionLabel.length > 0,
+      `${toolName} nextBestActionLabel is required.`,
+    );
+    assert(
+      typeof payload.conversationFollowUp.nextBestActionReason === "string" &&
+        payload.conversationFollowUp.nextBestActionReason.length > 0,
+      `${toolName} nextBestActionReason is required.`,
+    );
+    assert(
+      typeof payload.conversationFollowUp.shouldAskFollowUp === "boolean",
+      `${toolName} shouldAskFollowUp must be boolean.`,
+    );
   }
 
   const serialized = JSON.stringify(payload);

@@ -52,6 +52,8 @@
 
 이 출력은 `analyze_daily_status`, `create_daily_care_note`, `summarize_pet_chat_for_vet`, `record_food_ingestion_event`, `record_pet_photo_observation`에 적용됩니다. 기존 `riskPresentation`, `vetShareCard`, `safetyMessage`를 유지하면서 카카오톡 실사용 흐름을 보강한 것이 차별점입니다.
 
+멍케어노트 MCP는 단발성 응답으로 끝나지 않도록 `conversationFollowUp`을 제공합니다. 사진 관찰, 위험 음식 섭취, 가족 대화 요약, 일상 상태 분석, 집밥 원료 가이드 이후 사용자가 병원 상담용 요약, 가족 공유문, 다음 관찰 체크리스트, 식단 주의사항으로 자연스럽게 이어갈 수 있도록 후속 질문과 추천 답변을 구조화합니다.
+
 멍케어노트 MCP는 `dogProfile` 기반 자동 보정을 통해 보호자가 매번 반려견 이름, 나이, 몸무게를 반복 입력하지 않아도 상태 기록을 이어갈 수 있습니다. 또한 `recentRecords`가 제공되면 오늘 상태를 최근 기록과 비교해 반복 신호, 악화 가능성, 호전 가능성을 `trendSummary`로 정리합니다. 이를 통해 단발성 질의응답이 아니라 매일 축적되는 반려견 건강 기록 보조 경험을 제공합니다.
 
 현재 요청에 명시된 값은 프로필보다 우선하며, 평소 사료와 오늘 먹은 음식은 구분합니다. `knownConditions`와 복용 메모는 보호자 제공 기록으로만 다루고 새로운 질환 판단이나 약 복용 지시에 사용하지 않습니다. 추세 비교 역시 진단이 아니라 병원 상담 준비를 위한 기록 비교 보조입니다.

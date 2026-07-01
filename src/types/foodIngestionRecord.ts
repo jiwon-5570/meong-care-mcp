@@ -9,6 +9,7 @@ import type {
   IngredientNutritionSummary,
   IngredientSelectionGuide,
 } from "./petFoodIngredient.js";
+import type { ConversationFollowUp } from "../logic/conversationFollowUpRules.js";
 
 export interface FoodIngestionEventInput {
   dogName?: string;
@@ -55,6 +56,7 @@ export interface FoodIngestionEventResult {
   toolChainGuide: ToolChainGuide;
   ingredientSelectionGuide?: IngredientSelectionGuide;
   ingredientNutritionSummary?: IngredientNutritionSummary;
+  conversationFollowUp: ConversationFollowUp;
   safetyNotice: string;
 }
 

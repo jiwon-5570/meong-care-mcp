@@ -7,6 +7,10 @@ import {
 } from "./toolChainGuideRules.js";
 import type { DogProfile } from "../types/dogProfile.js";
 import type { IngredientNutritionSummary } from "../types/petFoodIngredient.js";
+import {
+  buildConversationFollowUp,
+  type ConversationFollowUp,
+} from "./conversationFollowUpRules.js";
 
 export type FoodRiskLevel = "safe" | "caution" | "danger" | "unknown";
 
@@ -29,6 +33,7 @@ export interface FoodSafetyResult {
   riskPresentation: RiskPresentation;
   toolChainGuide: ToolChainGuide;
   ingredientNutritionSummary?: IngredientNutritionSummary;
+  conversationFollowUp: ConversationFollowUp;
 }
 
 interface FoodRule {
@@ -272,6 +277,13 @@ function buildFoodSafetyResult(
       vetPhone: input.dogProfile?.vetPhone,
       hasVetShareCard: false,
       hasVetCallScript: false,
+    }),
+    conversationFollowUp: buildConversationFollowUp({
+      source: "food_safety",
+      dogName: input.dogProfile?.dogName,
+      foodRiskLevel: riskLevel,
+      hasIngredientNutritionSummary: false,
+      ownerRequestedHospitalSearch,
     }),
   };
 }

@@ -143,6 +143,8 @@
 
 `find_nearby_animal_hospitals`는 보호자가 “근처 병원 찾아줘”, “야간 병원 알려줘”처럼 병원 검색을 명시적으로 요청했을 때만 `recommendedNextTools`에 포함됩니다. 실제 검색 전에는 지역 등 필요한 정보를 확인하며 `userConfirmationNeeded`는 `true`입니다.
 
+위험 상황에서도 병원 검색은 자동 실행하지 않으며, 사용자가 “근처 동물병원 찾아줘”처럼 명시적으로 요청했을 때만 `find_nearby_animal_hospitals`로 이어집니다.
+
 ## MCP Tool 목록
 
 | Tool | 역할 |
@@ -208,7 +210,7 @@
 
 포함 필드:
 
-- `chatFirstReply`: 사용자가 가장 먼저 볼 4~7줄의 자연스러운 안내
+- `chatFirstReply`: 사용자가 가장 먼저 볼 4~9줄의 자연스러운 안내와 마지막 후속 질문
 - `familyShareText`: 가족방에 그대로 공유할 수 있는 행동 중심 요약
 - `vetCallScript`: 동물병원에 전화할 때 읽을 수 있는 2~4문장
 - `nextInputExample`: 다음 상태 기록을 쉽게 이어가기 위한 카카오톡 입력 예시
@@ -221,6 +223,7 @@
 - `summarize_pet_chat_for_vet`
 - `record_food_ingestion_event`
 - `record_pet_photo_observation`
+- `check_food_safety`
 
 예시:
 
@@ -232,6 +235,26 @@
 ```
 
 `kakaoActionText` 역시 진단이나 처방을 제공하지 않으며 모든 tool 응답의 기존 `safetyMessage`를 유지합니다.
+
+## 대화 연속성 안내
+
+멍케어노트 MCP는 주요 응답에 `conversationFollowUp`을 포함해 사용자가 다음 대화를 자연스럽게 이어갈 수 있도록 돕습니다. 사진 관찰, 위험 음식 섭취, 가족 대화 요약, 일상 상태 분석, 집밥 원료 가이드 이후 사용자가 병원 상담용 요약, 가족 공유문, 다음 관찰 체크리스트, 식단 주의사항으로 이어갈 수 있도록 후속 질문과 추천 답변을 구조화합니다.
+
+포함 정보:
+
+- `assistantFollowUpQuestion`: 다음 대화를 이어가는 한 문장 질문
+- `suggestedUserReplies`: 사용자가 바로 선택하거나 따라 말할 수 있는 짧은 답변 예시
+- `nextBestActionLabel`: 다음으로 권장하는 기록 또는 상담 준비 행동
+- `nextBestActionReason`: 해당 행동이 필요한 이유
+- `shouldAskFollowUp`: 후속 질문 표시 여부
+
+예시:
+
+```text
+병원에 상담받으실 수 있도록 현재 관찰 내용과 상담 문장을 정리해드릴까요?
+```
+
+`kakaoActionText.chatFirstReply`의 마지막 줄에도 같은 후속 질문을 한 번만 표시합니다. `suggestedUserReplies`는 구조화 데이터로 제공하며 본문에 반복해서 나열하지 않습니다. `vet_consult` 또는 `urgent` 상황에서는 “근처 동물병원 찾아줘”를 선택지로 제공할 수 있지만, 이 선택지만으로 병원 검색 tool을 실행하지는 않습니다. 사용자가 해당 답변을 선택하거나 병원 검색을 명시적으로 요청한 다음 요청에서만 `find_nearby_animal_hospitals`가 `recommendedNextTools`에 포함됩니다.
 
 ## 입력이 부족한 상태에서도 안내
 
@@ -548,6 +571,7 @@ meong-care-mcp/
 │  ├─ logic/
 │  │  ├─ careRules.ts
 │  │  ├─ chatSummaryRules.ts
+│  │  ├─ conversationFollowUpRules.ts
 │  │  ├─ dailyCareNoteRules.ts
 │  │  ├─ dogProfileRules.ts
 │  │  ├─ foodIngestionRules.ts

@@ -5,6 +5,7 @@ import type { RiskPresentation } from "../logic/riskPresentationRules.js";
 import type { VetShareCard } from "../logic/vetShareCardRules.js";
 import type { DogProfile, DogProfileUsage } from "./dogProfile.js";
 import type { ToolChainGuide } from "../logic/toolChainGuideRules.js";
+import type { ConversationFollowUp } from "../logic/conversationFollowUpRules.js";
 
 export type PhotoType = "stool" | "skin";
 export type AppetiteForPhoto = "normal" | "less" | "none" | "unknown";
@@ -47,6 +48,7 @@ export interface PhotoObservationAnalysis {
   toolChainGuide: ToolChainGuide;
   photoLimitations: string;
   hospitalSearchGuide?: string;
+  conversationFollowUp: ConversationFollowUp;
 }
 
 export interface StoredPhotoRecord {

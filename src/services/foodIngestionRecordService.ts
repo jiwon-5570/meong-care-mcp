@@ -60,6 +60,7 @@ export async function recordFoodIngestionEvent(
     kakaoActionText: analysis.kakaoActionText,
     dogProfileUsage: analysis.dogProfileUsage,
     toolChainGuide: analysis.toolChainGuide,
+    conversationFollowUp: analysis.conversationFollowUp,
     ...(analysis.ingredientSelectionGuide !== undefined
       ? { ingredientSelectionGuide: analysis.ingredientSelectionGuide }
       : {}),

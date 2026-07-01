@@ -30,6 +30,7 @@ import {
   buildIngredientNutritionSummary,
   findMatchingIngredient,
 } from "./logic/ingredientSelectionRules.js";
+import { buildConversationFollowUp } from "./logic/conversationFollowUpRules.js";
 
 const PORT = parsePort(process.env.PORT);
 const MCP_ENDPOINT = "/mcp";
@@ -179,9 +180,29 @@ function createMcpServer(): McpServer {
           : undefined;
       }
 
+      const conversationFollowUp = buildConversationFollowUp({
+        source: "food_safety",
+        dogName: input.dogProfile?.dogName,
+        foodRiskLevel: foodSafety.riskLevel,
+        hasIngredientNutritionSummary: ingredientNutritionSummary !== undefined,
+        ownerRequestedHospitalSearch: input.ownerRequestedHospitalSearch,
+      });
+      const kakaoActionText = buildKakaoActionText({
+        source: "food_safety",
+        dogName: input.dogProfile?.dogName,
+        riskLevel: foodSafety.riskLevel,
+        riskPresentation: foodSafety.riskPresentation,
+        foodName: input.foodName,
+        ownerConcern: input.ownerConcern,
+        vetContactGuide: foodSafety.toolChainGuide.vetContactGuide,
+        conversationFollowUp,
+      });
+
       const result = withSafetyMessage({
         ...foodSafety,
         ...(ingredientNutritionSummary !== undefined ? { ingredientNutritionSummary } : {}),
+        conversationFollowUp,
+        kakaoActionText,
       });
       return toToolResponse(result);
     },
@@ -224,6 +245,7 @@ function createMcpServer(): McpServer {
         dogProfileUsage: analysis.dogProfileUsage,
         trendSummary: analysis.trendSummary,
         toolChainGuide: analysis.toolChainGuide,
+        conversationFollowUp: analysis.conversationFollowUp,
         kakaoActionText: buildKakaoActionText({
           source: "daily_status",
           dogName: analysis.dogName,
@@ -236,6 +258,7 @@ function createMcpServer(): McpServer {
           dogProfileUsage: analysis.dogProfileUsage,
           trendSummary: analysis.trendSummary,
           vetContactGuide: analysis.toolChainGuide.vetContactGuide,
+          conversationFollowUp: analysis.conversationFollowUp,
         }),
         todayCareRecommendations: [
           care.dietManagement,

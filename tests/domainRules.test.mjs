@@ -208,6 +208,9 @@ test("daily status normal result includes low severity risk presentation", () =>
   assert.equal(analysis.riskPresentation.severityOrder, 1);
   assert.equal(analysis.trendSummary.comparedWithRecentRecords, false);
   assert.equal(analysis.trendSummary.trendLabel, "no_recent_data");
+  assertConversationFollowUp(analysis.conversationFollowUp);
+  assert.match(analysis.conversationFollowUp.assistantFollowUpQuestion, /기록|비교/);
+  assert.match(analysis.conversationFollowUp.nextBestActionLabel, /기준|기록/);
 });
 
 test("daily status fills missing basics from dogProfile", () => {
@@ -499,6 +502,10 @@ test("daily care note conditionally includes ingredient selection guide", async 
   assert.match(note.ingredientSelectionGuide?.familyShareText ?? "", /몽이/);
   assert.match(note.userFriendlyGuide, /식단 원료 가이드/);
   assertIngredientGuideSafety(note.ingredientSelectionGuide);
+  assertConversationFollowUp(note.conversationFollowUp);
+  assert.ok(
+    note.conversationFollowUp.suggestedUserReplies.some((reply) => /식단|가족방|비교/.test(reply)),
+  );
 });
 
 test("ingredient selection compares requested carrot and cod", async () => {
@@ -591,6 +598,10 @@ test("pet chat summary extracts symptoms and creates vet summary", () => {
   assert.match(summary.kakaoActionText.vetCallScript, /밥|식욕/);
   assert.match(summary.kakaoActionText.nextInputExample, /구토/);
   assert.ok(summary.kakaoActionText.whyThisRisk.length >= 2);
+  assertConversationFollowUp(summary.conversationFollowUp);
+  assert.match(summary.conversationFollowUp.assistantFollowUpQuestion, /병원|가족방/);
+  assert.ok(summary.conversationFollowUp.suggestedUserReplies.some((reply) => reply.includes("가족방")));
+  assert.ok(summary.kakaoActionText.chatFirstReply.includes(summary.conversationFollowUp.assistantFollowUpQuestion));
 });
 
 test("pet chat summary elevates dangerous food mention to urgent", () => {
@@ -728,6 +739,34 @@ test("photo observation rules classify stool and skin observations", () => {
   );
 });
 
+test("skin photo observation continues into vet or family sharing", () => {
+  const result = analyzePhotoObservation({
+    dogName: "강이",
+    photoType: "skin",
+    visualNotes: "배 쪽에 붉은기와 털 빠짐이 보임",
+    observedSigns: ["붉은기", "털 빠짐"],
+    relatedSymptoms: ["가려움"],
+    appetite: "normal",
+    vomiting: "none",
+    energy: "normal",
+  });
+
+  assertConversationFollowUp(result.conversationFollowUp);
+  assert.match(result.conversationFollowUp.assistantFollowUpQuestion, /상담|정리/);
+  assert.ok(
+    result.conversationFollowUp.suggestedUserReplies.some((reply) => /병원|가족방/.test(reply)),
+  );
+  assert.ok(
+    result.conversationFollowUp.suggestedUserReplies.includes("근처 동물병원 찾아줘"),
+  );
+  assert.ok(result.kakaoActionText.chatFirstReply.includes(result.conversationFollowUp.assistantFollowUpQuestion));
+  assert.equal(result.toolChainGuide.vetContactGuide.shouldAutoSearchHospital, false);
+  assert.ok(!hasRecommendedTool(result.toolChainGuide, "find_nearby_animal_hospitals"));
+  assert.doesNotMatch(result.hospitalSearchGuide ?? "", /위험도가[^.]*find_nearby_animal_hospitals/);
+  assert.match(result.hospitalSearchGuide ?? "", /근처 동물병원 찾아줘/);
+  assert.match(result.hospitalSearchGuide ?? "", /find_nearby_animal_hospitals/);
+});
+
 test("stool photo observation includes next recording guidance", () => {
   const result = analyzePhotoObservation({
     dogName: "몽이",
@@ -856,6 +895,13 @@ test("food ingestion event produces missing questions and danger summary", () =>
   assert.match(analysis.kakaoActionText.vetCallScript, /30분 전/);
   assert.match(analysis.kakaoActionText.vetCallScript, /동물병원|상담/);
   assert.match(analysis.kakaoActionText.whyThisRisk.join(" "), /위험 음식|포도|샤인머스캣/);
+  assertConversationFollowUp(analysis.conversationFollowUp);
+  assert.match(analysis.conversationFollowUp.assistantFollowUpQuestion, /병원|전화|상담/);
+  assert.ok(
+    analysis.conversationFollowUp.suggestedUserReplies.some((reply) => /병원 전화|상담/.test(reply)),
+  );
+  assert.match(analysis.conversationFollowUp.nextBestActionLabel, /병원|상담/);
+  assert.ok(analysis.kakaoActionText.chatFirstReply.includes(analysis.conversationFollowUp.assistantFollowUpQuestion));
 });
 
 test("food ingestion event fills dog name and weight from dogProfile", () => {
@@ -963,6 +1009,9 @@ test("urgent photo observation keeps existing-vet-first opt-in flow", () => {
   assert.ok(!hasRecommendedTool(result.toolChainGuide, "find_nearby_animal_hospitals"));
   assert.equal(typeof result.photoFollowUpGuide, "object");
   assert.equal(typeof result.vetShareCard, "object");
+  assertConversationFollowUp(result.conversationFollowUp);
+  assert.ok(result.conversationFollowUp.suggestedUserReplies.includes("근처 동물병원 찾아줘"));
+  assert.doesNotMatch(result.hospitalSearchGuide ?? "", /위험도가[^.]*find_nearby_animal_hospitals/);
 });
 
 function assertKakaoActionText(kakaoActionText) {
@@ -974,14 +1023,30 @@ function assertKakaoActionText(kakaoActionText) {
   assert.ok(Array.isArray(kakaoActionText.whyThisRisk));
   assert.ok(kakaoActionText.whyThisRisk.length >= 2);
   assert.ok(kakaoActionText.chatFirstReply.split("\n").length >= 4);
-  assert.ok(kakaoActionText.chatFirstReply.split("\n").length <= 7);
+  assert.ok(kakaoActionText.chatFirstReply.split("\n").length <= 9);
   assert.ok(kakaoActionText.familyShareText.split("\n").filter((line) => line.startsWith("- ")).length >= 2);
   assert.ok(kakaoActionText.familyShareText.split("\n").filter((line) => line.startsWith("- ")).length <= 4);
 
   const serialized = JSON.stringify(kakaoActionText);
   assert.doesNotMatch(
     serialized,
-    /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|정상 괜찮습니다|확실히 괜찮습니다|완치/,
+    /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|정상 괜찮습니다|확실히 괜찮습니다|완치|먹이면 낫습니다|치료됩니다|주식으로 대체하세요|처방식 대신/,
+  );
+}
+
+function assertConversationFollowUp(conversationFollowUp) {
+  assert.equal(typeof conversationFollowUp, "object");
+  assert.equal(typeof conversationFollowUp.assistantFollowUpQuestion, "string");
+  assert.ok(conversationFollowUp.assistantFollowUpQuestion.length > 0);
+  assert.ok(Array.isArray(conversationFollowUp.suggestedUserReplies));
+  assert.ok(conversationFollowUp.suggestedUserReplies.length >= 2);
+  assert.ok(conversationFollowUp.suggestedUserReplies.length <= 4);
+  assert.equal(typeof conversationFollowUp.nextBestActionLabel, "string");
+  assert.equal(typeof conversationFollowUp.nextBestActionReason, "string");
+  assert.equal(conversationFollowUp.shouldAskFollowUp, true);
+  assert.doesNotMatch(
+    JSON.stringify(conversationFollowUp),
+    /이 병입니다|이 약을 먹이세요|병원 안 가도 됩니다|진단했습니다|처방합니다|확실히 괜찮습니다|완치|먹이면 낫습니다|치료됩니다|주식으로 대체하세요|처방식 대신/,
   );
 }
 
